@@ -1,0 +1,582 @@
+:root {
+    --PrimaryColor: #097aa0;
+    --SecondaryColor: orangered;
+    --gradientColor: linear-gradient(to right, orangered, #097aa0);
+    --whiteColor: hsl(0, 0%, 100%);
+    --blackColor: #343a40;
+    --textColor: hsl(240, 4%, 36%);
+    --whiteColorDeam: hsl(0, 0%, 93%);
+    --greyText: rgb(190, 190, 190);
+    --inputColor: rgb(239, 239, 239);
+    --bodyColor: #f7f9fc;
+    --cardBG: rgb(225, 225, 235);
+    --goldColor: gold;
+    --footerBottomColor: #097aa0;
+  }
+  
+  .footer {
+    width: 100%;
+    position: relative;
+    padding: 5rem 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: auto;
+    background: var(--blackColor);
+  }
+  
+  .footer .videoDiv {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    overflow: hidden;
+  }
+  
+  .footer .videoDiv video {
+    height: 100%;
+    width: 100%;
+    object-fit: cover;
+  }
+  
+  .footer .videoDiv::after {
+    content: '';
+    position: absolute;
+    background: rgba(0, 0, 0, 0.7);
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    mix-blend-mode: multiply;
+  }
+  
+  .footer .secContent {
+    width: 100%;
+    max-width: 1200px;
+    padding: 2rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    margin: auto;
+    row-gap: 3.5rem;
+    z-index: 100;
+    position: relative;
+  }
+  
+  .footer .secContent .contactDiv {
+    display: flex;
+    justify-content: space-between;
+    flex-direction: column;
+    gap: 2rem;
+    width: 100%;
+    text-align: center;
+  }
+  
+  .footer .secContent .contactDiv .text small {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--whiteColor);
+    letter-spacing: 2px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  
+  .footer .secContent .contactDiv .text h2 {
+    color: var(--whiteColor);
+    font-size: 2.5rem;
+    margin-top: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    letter-spacing: 1px;
+  }
+  
+  .footer .secContent .contactDiv .inputDiv {
+    width: 100%;
+    max-width: 550px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionForm {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+  }
+  
+  @media (max-width: 576px) {
+    .footer .secContent .contactDiv .inputDiv .subscriptionForm {
+      flex-direction: column;
+    }
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionForm input {
+    flex: 1;
+    padding: 1rem 1.5rem;
+    border-radius: 50px;
+    border: 2px solid var(--whiteColor);
+    outline: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--whiteColor);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(4px);
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionForm input::placeholder {
+    color: var(--whiteColor);
+    opacity: 0.8;
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionForm input:focus {
+    border-color: var(--SecondaryColor);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionForm .btn {
+    padding: 1rem 2rem;
+    border-radius: 50px;
+    background: var(--gradientColor);
+    border: none;
+    cursor: pointer;
+    color: var(--whiteColor);
+    font-weight: 600;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.4s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    min-width: 130px;
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionForm .btn:hover {
+    background: var(--SecondaryColor);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionForm .btn:active {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.23);
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionForm .btn .icon {
+    font-size: 20px;
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionMessage {
+    font-size: 0.95rem;
+    padding: 0.7rem 1.5rem;
+    border-radius: 50px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionMessage.success {
+    color: var(--whiteColor);
+    background: rgba(46, 204, 113, 0.2);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(46, 204, 113, 0.3);
+  }
+  
+  .footer .secContent .contactDiv .inputDiv .subscriptionMessage.error {
+    color: var(--whiteColor);
+    background: rgba(231, 76, 60, 0.2);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+  }
+  
+  .footer .secContent .footerCard {
+    position: relative;
+    padding: 2rem 2rem 5rem;
+    background: var(--whiteColor);
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+  }
+  
+  .footer .secContent .footerCard .footerIntro {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .logoDiv .logo {
+    color: var(--blackColor);
+    font-weight: 700;
+    font-size: 1.6rem;
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .logoDiv .logo:hover {
+    color: var(--PrimaryColor);
+  }
+  
+  .footer .secContent .footerCard .footerIntro .logoDiv .logo .icon {
+    font-size: 32px;
+    color: var(--PrimaryColor);
+    margin-right: 12px;
+    transition: all 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .logoDiv .logo:hover .icon {
+    transform: rotate(20deg);
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerContent {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  
+  @media (max-width: 992px) {
+    .footer .secContent .footerCard .footerIntro .footerContent {
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerContent .companyInfo {
+    flex: 3;
+    font-size: 0.95rem;
+    color: var(--textColor);
+    line-height: 1.7;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer {
+    flex: 2;
+    align-self: flex-start;
+    min-width: 250px;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer .paymentMethods {
+    padding: 1.2rem;
+    border-radius: 0.5rem;
+    background: #f5f7fa;
+    border: 1px solid #e5e9f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer .paymentMethods .acceptsText {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--textColor);
+    font-weight: 600;
+    text-align: center;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer .paymentMethods .paymentIcons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer .paymentMethods .paymentIcons .paymentIcon {
+    height: 32px;
+    width: auto;
+    max-width: 60px;
+    object-fit: contain;
+    transition: all 0.3s ease;
+    opacity: 1;
+    visibility: visible;
+    padding: 4px;
+    background: var(--whiteColor);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer .paymentMethods .paymentIcons .paymentIcon:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerSocials {
+    display: flex;
+    gap: 1.2rem;
+    margin-top: 0.5rem;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerSocials a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #f0f2f5;
+    transition: all 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerSocials a:hover {
+    background: var(--PrimaryColor);
+    transform: translateY(-5px);
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerSocials a:hover .icon {
+    color: var(--whiteColor);
+  }
+  
+  .footer .secContent .footerCard .footerIntro .footerSocials a .icon {
+    color: var(--blackColor);
+    font-size: 22px;
+    transition: all 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerLinks {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    margin-top: 1rem;
+  }
+  
+  @media (max-width: 992px) {
+    .footer .secContent .footerCard .footerLinks {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .footer .secContent .footerCard .footerLinks {
+      grid-template-columns: 1fr;
+    }
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .groupTitle {
+    display: block;
+    font-weight: 700;
+    color: var(--blackColor);
+    margin-bottom: 1.2rem;
+    font-size: 1rem;
+    position: relative;
+    padding-bottom: 0.5rem;
+    text-transform: uppercase;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .groupTitle::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 40px;
+    height: 2px;
+    background: var(--PrimaryColor);
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-wrapper {
+    display: flex;
+    max-height: 200px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-wrapper.expanded {
+    max-height: 1000px;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-right: 20px;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-column .footerList {
+    font-size: 0.95rem;
+    color: var(--textColor);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-column .footerList .icon {
+    font-size: 16px;
+    color: var(--PrimaryColor);
+    transition: all 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-column .footerList a {
+    color: var(--textColor);
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-column .footerList:hover {
+    color: var(--PrimaryColor);
+    transform: translateX(5px);
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-column .footerList:hover .icon {
+    color: var(--PrimaryColor);
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .services-column .footerList:hover a {
+    color: var(--PrimaryColor);
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .show-services-btn {
+    align-self: flex-start;
+    margin-top: 10px;
+    background: var(--PrimaryColor);
+    color: var(--whiteColor);
+    border: none;
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .show-services-btn:hover {
+    background: var(--SecondaryColor);
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .footerList {
+    font-size: 0.95rem;
+    color: var(--textColor);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .footerList .icon {
+    font-size: 16px;
+    color: var(--PrimaryColor);
+    transition: all 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .footerList a {
+    color: var(--textColor);
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .footerList:hover {
+    color: var(--PrimaryColor);
+    transform: translateX(5px);
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .footerList:hover .icon {
+    color: var(--PrimaryColor);
+  }
+  
+  .footer .secContent .footerCard .footerLinks .linkGroup .footerList:hover a {
+    color: var(--PrimaryColor);
+  }
+  
+  .footer .secContent .footerCard .footerDiv {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--footerBottomColor);
+    padding: 1rem;
+    gap: 0.5rem;
+  }
+  
+  .footer .secContent .footerCard .footerDiv small {
+    font-size: 0.85rem;
+    color: var(--whiteColor);
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  
+  @media (max-width: 1024px) {
+    .footer .secContent .footerCard .footerLinks {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .footer .secContent .contactDiv .text h2 {
+      font-size: 2rem;
+    }
+  
+    .footer .secContent .footerCard .footerIntro .footerContent {
+      flex-direction: column;
+    }
+  
+    .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer {
+      width: 100%;
+      margin-top: 1.5rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .footer {
+      padding: 3rem 0 0;
+    }
+  
+    .footer .secContent {
+      padding: 1.5rem 1rem;
+    }
+  
+    .footer .secContent .contactDiv .text small {
+      font-size: 12px;
+    }
+  
+    .footer .secContent .contactDiv .text h2 {
+      font-size: 1.5rem;
+    }
+  
+    .footer .secContent .footerCard {
+      padding: 1.5rem 1rem 5rem;
+    }
+  
+    .footer .secContent .footerCard .footerIntro .logoDiv .logo {
+      font-size: 1.3rem;
+    }
+  
+    .footer .secContent .footerCard .footerIntro .logoDiv .logo .icon {
+      font-size: 25px;
+    }
+  
+    .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer .paymentMethods .paymentIcons {
+      justify-content: center;
+      gap: 0.8rem;
+    }
+  
+    .footer .secContent .footerCard .footerIntro .footerContent .paymentMethodsContainer .paymentMethods .paymentIcons .paymentIcon {
+      height: 28px;
+      max-width: 50px;
+    }
+  }

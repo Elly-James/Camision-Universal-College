@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Environment variables (critical for PostgreSQL credentials)
+.env
+.env.local
+
+# PostgreSQL (specific ignores)
+*.pid
+*.socket
+postgres_data/  # For local PostgreSQL data files
+
+# Database migrations (if using Flask-Migrate/Alembic)
+migrations/versions/  # Ignore auto-generated migration scripts
+!migrations/versions/.keep  # Keeping this empty file if needed
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Flask
+instance/
