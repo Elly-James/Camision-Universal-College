@@ -1,0 +1,14 @@
+                                                List of databases
+         Name         |     Owner      | Encoding |   Collate   |    Ctype    |         Access privileges         
+----------------------+----------------+----------+-------------+-------------+-----------------------------------
+ camison_univ_college | camison_user   | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =Tc/camison_user                 +
+                      |                |          |             |             | camison_user=CTc/camison_user
+ elysian_travels      | travelscompany | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =Tc/travelscompany               +
+                      |                |          |             |             | travelscompany=CTc/travelscompany
+ postgres             | postgres       | UTF8     | en_US.UTF-8 | en_US.UTF-8 | 
+ template0            | postgres       | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres                      +
+                      |                |          |             |             | postgres=CTc/postgres
+ template1            | postgres       | UTF8     | en_US.UTF-8 | en_US.UTF-8 | =c/postgres                      +
+                      |                |          |             |             | postgres=CTc/postgres
+(5 rows)
+

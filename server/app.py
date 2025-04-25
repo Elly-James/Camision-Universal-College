@@ -1,78 +1,158 @@
 import os
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, g
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from flask_jwt_extended import (
-    create_access_token, jwt_required, get_jwt_identity, get_jwt,
-    create_refresh_token
-)
-from extensions import db, migrate, cors, jwt, bcrypt, mail
+import jwt
+import uuid
+import logging
+import requests
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-import requests
-import jwt as pyjwt
-import stripe
-from flask_mail import Message
+from config import config
+from extensions import db, cors, bcrypt, mail, jwt as jwt_manager
+from flask_migrate import Migrate
+from models import User, Job, Message, ResetToken
 
-def create_app():
+# Set up logging
+logging.basicConfig(level=logging.WARNING)  # Reduced verbosity
+logger = logging.getLogger(__name__)
+
+def create_app(config_name='development'):
+    """Application factory function"""
     app = Flask(__name__)
     
-    load_dotenv()
+    # Load configuration
+    app.config.from_object(config[config_name])
     
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL').replace('postgres://', 'postgresql://')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
-    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
-    app.config['JWT_BLACKLIST_ENABLED'] = True
-    app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
-    app.config['UPLOAD_FOLDER'] = 'uploads'
-    app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-    app.config['MAIL_PORT'] = 587
-    app.config['MAIL_USE_TLS'] = True
-    app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
-    app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
-    app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
-    app.config['STRIPE_SECRET_KEY'] = os.getenv('STRIPE_SECRET_KEY')
+    # Override database URI if not set in config (fallback to env)
+    if not app.config.get('SQLALCHEMY_DATABASE_URI'):
+        app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+    if not app.config.get('SQLALCHEMY_DATABASE_URI'):
+        logger.error("No database URI provided. Please set DATABASE_URL in .env")
+        raise ValueError("DATABASE_URL is not set")
+
+    # Ensure upload folder is set
+    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
     
-    stripe.api_key = app.config['STRIPE_SECRET_KEY']
+    # Initialize extensions
+    initialize_extensions(app)
     
+    # Configure logging
+    configure_logging(app)
+    
+    # Initialize Flask-Migrate
+    migrate = Migrate(app, db)
+    
+    # Setup database
+    setup_database(app)
+    
+    return app
+
+def initialize_extensions(app):
+    """Initialize Flask extensions"""
+    cors.init_app(app, resources={r"/*": {"origins": app.config.get('FRONTEND_URL', '*')}}, 
+                  supports_credentials=True)
     db.init_app(app)
-    migrate.init_app(app, db)
-    cors.init_app(app, resources={r"/api/*": {"origins": os.getenv('FRONTEND_URL', 'http://localhost:3000')}})
-    jwt.init_app(app)
     bcrypt.init_app(app)
     mail.init_app(app)
+    jwt_manager.init_app(app)
+    
+    # Configure JWT
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
 
-    # Ensure uploads directory exists
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+def configure_logging(app):
+    """Configure application logging"""
+    if app.config['DEBUG']:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.WARNING)
+    
+    # Log database connection info
+    logger.info(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
-    # Token blacklist storage (in-memory for simplicity)
-    blacklisted_tokens = set()
+def setup_database(app):
+    """Setup database connection and ensure connectivity"""
+    try:
+        # Verify database connection
+        with app.app_context():
+            connection = db.engine.connect()
+            connection.close()
+            logger.info("Database connection established successfully")
+            
+            # Create tables if they don't exist
+            # db.create_all()
+            
+            # Log registered models
+            logger.info("SQLAlchemy metadata tables: %s", db.Model.metadata.tables.keys())
+            
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {str(e)}")
+        raise
 
-    @jwt.token_in_blocklist_loader
-    def check_if_token_revoked(jwt_header, jwt_payload):
-        jti = jwt_payload['jti']
-        return jti in blacklisted_tokens
+# Create the application
+app = create_app(os.getenv('FLASK_ENV', 'development'))
 
-    @app.route('/')
-    def index():
-        return jsonify({"message": "Welcome to the Learner Handler API! Use /api endpoints to interact with the API."})
+# Create upload folder
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    # AUTHENTICATION ROUTES
-    @app.route('/api/auth/register', methods=['POST'])
-    def register():
-        from models import User
-        data = request.get_json()
-        
-        if not data.get('email') or not data.get('password') or not data.get('username'):
-            return jsonify({"error": "Email, username, and password are required"}), 400
+# Import seed function
+from seed import seed_database
 
+# Helper function to generate JWT tokens
+def generate_tokens(user):
+    access_token = jwt.encode({
+        'user_id': user.id,
+        'role': user.role,
+        'exp': datetime.utcnow() + timedelta(hours=24)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+
+    refresh_token = jwt.encode({
+        'user_id': user.id,
+        'exp': datetime.utcnow() + timedelta(days=30)
+    }, app.config['SECRET_KEY'], algorithm='HS256')
+
+    return access_token, refresh_token
+
+# Session cleanup
+@app.after_request
+def cleanup_session(response):
+    """Remove the database session after each request"""
+    try:
+        db.session.commit()  # Commit any pending transactions
+    except:
+        db.session.rollback()  # Rollback on error
+    finally:
+        db.session.remove()  # Remove the session
+    return response
+
+# Routes
+@app.route('/')
+def index():
+    return jsonify({"message": "Welcome to the Academic Assistance API!"})
+
+@app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
+def register():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    data = request.get_json()
+    logger.info(f"Register attempt with data: {data}")
+    if not data.get('email') or not data.get('password') or not data.get('username'):
+        logger.error("Missing required fields in register request")
+        return jsonify({"error": "Email, username, and password are required"}), 400
+
+    if not '@' in data['email'] or not '.' in data['email']:
+        logger.error(f"Invalid email format: {data['email']}")
+        return jsonify({"error": "Invalid email format"}), 400
+
+    try:
         if User.query.filter_by(email=data['email']).first():
+            logger.error(f"Email already registered: {data['email']}")
             return jsonify({"error": "Email already registered"}), 400
 
         if User.query.filter_by(username=data['username']).first():
+            logger.error(f"Username already taken: {data['username']}")
             return jsonify({"error": "Username already taken"}), 400
 
         user = User(
@@ -86,37 +166,141 @@ def create_app():
         db.session.add(user)
         db.session.commit()
         
-        access_token = create_access_token(identity=user.id)
-        refresh_token = create_refresh_token(identity=user.id)
+        access_token, refresh_token = generate_tokens(user)
         
+        logger.info(f"User registered successfully: {data['email']}")
         return jsonify({
             'access_token': access_token,
             'refresh_token': refresh_token,
             'role': user.role,
             'user': user.to_dict()
         }), 201
+    except Exception as e:
+        logger.error(f"Registration failed: {str(e)}")
+        db.session.rollback()
+        return jsonify({"error": "Registration failed", "details": str(e)}), 500
 
-    @app.route('/api/auth/login', methods=['POST'])
-    def login():
-        from models import User
-        data = request.get_json()
-        
-        if not data.get('email') or not data.get('password'):
-            return jsonify({"error": "Email and password are required"}), 400
+@app.route('/auth/login', methods=['POST', 'OPTIONS'])
+@app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
+def login():
+    if request.method == 'OPTIONS':
+        return '', 200
 
+    data = request.get_json()
+    logger.info(f"Login attempt with data: {data}")
+    if not data.get('email') or not data.get('password'):
+        logger.error("Missing email or password in login request")
+        return jsonify({"error": "Email and password are required"}), 400
+
+    try:
         user = User.query.filter_by(email=data['email']).first()
         if not user:
             user = User.query.filter_by(username=data['email']).first()
 
         if not user or not user.check_password(data['password']):
+            logger.error(f"Invalid credentials for: {data['email']}")
             return jsonify({"error": "Invalid credentials"}), 401
 
-        if data.get('role') and user.role != data['role']:
-            return jsonify({"error": "Invalid role"}), 401
+        if user.email == 'ellyjames1999@gmail.com':
+            user.role = 'admin'
+        else:
+            user.role = 'client'
+        db.session.commit()
 
-        access_token = create_access_token(identity=user.id)
-        refresh_token = create_refresh_token(identity=user.id)
+        access_token, refresh_token = generate_tokens(user)
         
+        g.current_user = user  # Cache user
+        logger.info(f"User logged in successfully: {data['email']}")
+        return jsonify({
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'role': user.role,
+            'user': user.to_dict()
+        })
+    except Exception as e:
+        logger.error(f"Login failed: {str(e)}")
+        return jsonify({"error": "Login failed", "details": str(e)}), 500
+
+@app.route('/auth/me', methods=['GET'])
+@app.route('/api/auth/me', methods=['GET'])
+def get_current_user():
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        user = db.session.get(User, data['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        g.current_user = user  # Cache user
+        return jsonify({
+            'user': user.to_dict(),
+            'role': user.role
+        }), 200
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+@app.route('/auth/google', methods=['POST', 'OPTIONS'])
+@app.route('/api/auth/google', methods=['POST', 'OPTIONS'])
+def google_login():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    data = request.get_json()
+    logger.info(f"Google login attempt with data: {data}")
+    if not data or not data.get('credential'):
+        logger.error("No credential provided in Google login request")
+        return jsonify({"error": "Google credential is required"}), 400
+
+    try:
+        client_id = os.getenv('GOOGLE_CLIENT_ID')
+        logger.info(f"Google OAuth config - Client ID: {client_id}")
+        if not client_id:
+            logger.error("Missing Google Client ID")
+            return jsonify({"error": "Server configuration error"}), 500
+
+        logger.info("Verifying Google ID token")
+        id_info = id_token.verify_oauth2_token(
+            data['credential'],
+            google_requests.Request(),
+            client_id
+        )
+
+        email = id_info.get('email')
+        if not email:
+            logger.error("No email in ID token")
+            return jsonify({"error": "Email not provided by Google"}), 400
+
+        name = id_info.get('name', 'Google User')
+        user = User.query.filter_by(email=email).first()
+
+        if not user:
+            logger.info(f"Creating new user with email: {email}")
+            user = User(
+                email=email,
+                username=email.split('@')[0],
+                name=name,
+                role='client',
+                password_hash=None
+            )
+            db.session.add(user)
+            db.session.commit()
+
+        if user.email == 'ellyjames1999@gmail.com':
+            user.role = 'admin'
+        else:
+            user.role = 'client'
+        db.session.commit()
+
+        access_token, refresh_token = generate_tokens(user)
+
+        g.current_user = user  # Cache user
+        logger.info(f"Google login successful for user: {email}")
         return jsonify({
             'access_token': access_token,
             'refresh_token': refresh_token,
@@ -124,218 +308,243 @@ def create_app():
             'user': user.to_dict()
         })
 
-    @app.route('/api/auth/me', methods=['GET'])
-    @jwt_required()
-    def get_current_user():
-        from models import User
-        user_id = get_jwt_identity()
-        user = User.query.get_or_404(user_id)
+    except ValueError as ve:
+        logger.error(f"Token verification failed: {str(ve)}")
         return jsonify({
-            'user': user.to_dict(),
-            'role': user.role
+            "error": "Invalid Google token",
+            "details": str(ve)
+        }), 400
+    except Exception as e:
+        logger.error(f"Google login error: {str(e)}")
+        return jsonify({
+            "error": "Failed to process Google login",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/auth/apple', methods=['POST', 'OPTIONS'])
+def apple_login():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    data = request.get_json()
+    logger.info(f"Apple login attempt with data: {data}")
+    if not data or not data.get('id_token'):
+        logger.error("No ID token provided in Apple login request")
+        return jsonify({"error": "Apple ID token is required"}), 400
+
+    try:
+        id_token_str = data['id_token']
+        decoded = jwt.decode(id_token_str, options={"verify_signature": False})
+        apple_public_keys = requests.get('https://appleid.apple.com/auth/keys').json()
+        key = None
+        for k in apple_public_keys['keys']:
+            if k['kid'] == decoded['kid']:
+                key = k
+                break
+
+        if not key:
+            logger.error("Failed to find matching Apple public key")
+            return jsonify({"error": "Failed to find matching Apple public key"}), 400
+
+        from jwt.algorithms import RSAAlgorithm
+        public_key = RSAAlgorithm.from_jwk(key)
+        decoded = jwt.decode(id_token_str, public_key, algorithms=['RS256'], audience=os.getenv('APPLE_CLIENT_ID'))
+
+        email = decoded.get('email')
+        if not email:
+            logger.error("No email in Apple ID token")
+            return jsonify({"error": "Email not provided by Apple"}), 400
+
+        name = 'Apple User'
+        user = User.query.filter_by(email=email).first()
+
+        if not user:
+            logger.info(f"Creating new user with email: {email}")
+            user = User(
+                email=email,
+                username=email.split('@')[0],
+                name=name,
+                role='client',
+                password_hash=None
+            )
+            db.session.add(user)
+            db.session.commit()
+
+        if user.email == 'ellyjames1999@gmail.com':
+            user.role = 'admin'
+        else:
+            user.role = 'client'
+        db.session.commit()
+
+        access_token, refresh_token = generate_tokens(user)
+
+        g.current_user = user  # Cache user
+        logger.info(f"Apple login successful for user: {email}")
+        return jsonify({
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'role': user.role,
+            'user': user.to_dict()
         })
 
-    @app.route('/api/auth/google', methods=['POST'])
-    def google_login():
-        from models import User
-        data = request.get_json()
-        
-        if not data or not data.get('code'):
-            return jsonify({"error": "Google authorization code is required"}), 400
+    except Exception as e:
+        logger.error(f"Apple login error: {str(e)}")
+        return jsonify({"error": "Failed to process Apple login", "details": str(e)}), 500
 
-        try:
-            client_id = os.getenv('GOOGLE_CLIENT_ID')
-            client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
-            redirect_uri = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:3000')
+@app.route('/api/auth/logout', methods=['POST', 'OPTIONS'])
+def logout():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    logger.info("User logged out successfully")
+    return jsonify({"message": "Successfully logged out"}), 200
+
+@app.route('/api/auth/refresh', methods=['POST', 'OPTIONS'])
+def refresh():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        user = db.session.get(User, data['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        g.current_user = user  # Cache user
+        access_token, _ = generate_tokens(user)
+        logger.info(f"Token refreshed for user ID: {user.id}")
+        return jsonify({'access_token': access_token})
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+@app.route('/api/auth/forgot-password', methods=['POST', 'OPTIONS'])
+def forgot_password():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    data = request.get_json()
+    logger.info(f"Forgot password request for email: {data.get('email')}")
+    if not data.get('email'):
+        logger.error("Missing email in forgot password request")
+        return jsonify({"error": "Email is required"}), 400
+
+    try:
+        user = User.query.filter_by(email=data['email']).first()
+        if not user:
+            logger.error(f"Email not found: {data['email']}")
+            return jsonify({"error": "Email not found"}), 404
+
+        token = str(uuid.uuid4())
+        expires_at = datetime.utcnow() + timedelta(hours=1)
+
+        reset_token = ResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=expires_at
+        )
+        db.session.add(reset_token)
+        db.session.commit()
+
+        reset_url = f"http://localhost:5173/reset-password?token={token}"
+        msg = Message(
+            subject="Password Reset Request",
+            recipients=[user.email],
+            body=f"""
+            You requested a password reset for your Camison Universal College account.
             
-            token_url = "https://oauth2.googleapis.com/token"
-            token_data = {
-                'code': data['code'],
-                'client_id': client_id,
-                'client_secret': client_secret,
-                'redirect_uri': redirect_uri,
-                'grant_type': 'authorization_code',
-            }
+            Click the link below to reset your password:
+            {reset_url}
             
-            headers = {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-
-            token_response = requests.post(
-                token_url,
-                data=token_data,
-                headers=headers,
-                timeout=10
-            )
-
-            token_response_json = token_response.json()
-            if token_response.status_code != 200:
-                return jsonify({
-                    "error": "Failed to authenticate with Google",
-                    "details": token_response_json.get('error_description', 'Unknown error')
-                }), 400
-
-            id_token_str = token_response_json.get('id_token')
-            if not id_token_str:
-                return jsonify({"error": "Invalid response from Google"}), 400
-
-            id_info = id_token.verify_oauth2_token(
-                id_token_str,
-                google_requests.Request(),
-                client_id
-            )
-
-            email = id_info.get('email')
-            if not email:
-                return jsonify({"error": "Email not provided by Google"}), 400
-
-            name = id_info.get('name', 'Google User')
-            user = User.query.filter_by(email=email).first()
-
-            if not user:
-                user = User(
-                    email=email,
-                    username=email.split('@')[0],
-                    name=name,
-                    role='client',
-                    password_hash=None
-                )
-                db.session.add(user)
-                db.session.commit()
-
-            access_token = create_access_token(identity=user.id)
-            refresh_token = create_refresh_token(identity=user.id)
-
-            return jsonify({
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'role': user.role,
-                'user': user.to_dict()
-            })
-
-        except Exception as e:
-            return jsonify({
-                "error": "Failed to process Google login",
-                "details": str(e)
-            }), 500
-
-    @app.route('/api/auth/apple', methods=['POST'])
-    def apple_login():
-        from models import User
-        data = request.get_json()
-
-        if not data or not data.get('id_token'):
-            return jsonify({"error": "Apple ID token is required"}), 400
-
+            This link will expire in 1 hour.
+            """
+        )
         try:
-            id_token_str = data['id_token']
-            decoded = pyjwt.decode(id_token_str, options={"verify_signature": False})
-            apple_public_keys = requests.get('https://appleid.apple.com/auth/keys').json()
-            key = None
-            for k in apple_public_keys['keys']:
-                if k['kid'] == decoded['kid']:
-                    key = k
-                    break
-
-            if not key:
-                return jsonify({"error": "Failed to find matching Apple public key"}), 400
-
-            from pyjwt.algorithms import RSAAlgorithm
-            public_key = RSAAlgorithm.from_jwk(key)
-            decoded = pyjwt.decode(id_token_str, public_key, algorithms=['RS256'], audience=os.getenv('APPLE_CLIENT_ID'))
-
-            email = decoded.get('email')
-            if not email:
-                return jsonify({"error": "Email not provided by Apple"}), 400
-
-            name = 'Apple User'
-            user = User.query.filter_by(email=email).first()
-
-            if not user:
-                user = User(
-                    email=email,
-                    username=email.split('@')[0],
-                    name=name,
-                    role='client',
-                    password_hash=None
-                )
-                db.session.add(user)
-                db.session.commit()
-
-            access_token = create_access_token(identity=user.id)
-            refresh_token = create_refresh_token(identity=user.id)
-
-            return jsonify({
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'role': user.role,
-                'user': user.to_dict()
-            })
-
+            mail.send(msg)
+            logger.info(f"Password reset email sent to: {user.email}")
         except Exception as e:
-            return jsonify({"error": "Failed to process Apple login", "details": str(e)}), 500
+            logger.error(f"Failed to send reset email: {str(e)}")
+            return jsonify({"error": "Failed to send reset email", "details": str(e)}), 500
 
-    @app.route('/api/auth/logout', methods=['POST'])
-    @jwt_required()
-    def logout():
-        jti = get_jwt()['jti']
-        blacklisted_tokens.add(jti)
-        return jsonify({"message": "Successfully logged out"}), 200
+        return jsonify({"message": "Password reset link sent to your email"}), 200
+    except Exception as e:
+        logger.error(f"Forgot password failed: {str(e)}")
+        return jsonify({"error": "Failed to process forgot password", "details": str(e)}), 500
 
-    @app.route('/api/auth/refresh', methods=['POST'])
-    @jwt_required(refresh=True)
-    def refresh():
-        current_user = get_jwt_identity()
-        new_token = create_access_token(identity=current_user)
-        return jsonify({'access_token': new_token})
+@app.route('/api/auth/reset-password', methods=['POST', 'OPTIONS'])
+def reset_password():
+    if request.method == 'OPTIONS':
+        return '', 200
 
-    # PAYMENT ROUTES
-    @app.route('/api/create-payment-intent', methods=['POST'])
-    @jwt_required()
-    def create_payment_intent():
-        try:
-            data = request.get_json()
-            amount = data.get('amount')
-            if not amount or amount <= 0:
-                return jsonify({"error": "Invalid amount"}), 400
+    data = request.get_json()
+    logger.info(f"Reset password attempt with token: {data.get('token')}")
+    if not data.get('token') or not data.get('password'):
+        logger.error("Missing token or password in reset password request")
+        return jsonify({"error": "Token and new password are required"}), 400
 
-            intent = stripe.PaymentIntent.create(
-                amount=amount,
-                currency='usd',
-                payment_method_types=['card'],
-            )
+    try:
+        reset_token = ResetToken.query.filter_by(token=data['token']).first()
+        if not reset_token:
+            logger.error("Invalid or expired token")
+            return jsonify({"error": "Invalid or expired token"}), 400
 
-            return jsonify({
-                'client_secret': intent['client_secret']
-            })
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        if reset_token.expires_at < datetime.utcnow():
+            db.session.delete(reset_token)
+            db.session.commit()
+            logger.error("Token has expired")
+            return jsonify({"error": "Token has expired"}), 400
 
-    # JOB ROUTES
-    @app.route('/api/jobs', methods=['POST'])
-    @jwt_required()
-    def create_job():
-        from models import Job, User
-        user_id = get_jwt_identity()
-        user = User.query.get_or_404(user_id)
+        user = db.session.get(User, reset_token.user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        user.set_password(data['password'])
+        db.session.delete(reset_token)
+        db.session.commit()
+
+        logger.info(f"Password reset successfully for user: {user.email}")
+        return jsonify({"message": "Password reset successfully"}), 200
+    except Exception as e:
+        logger.error(f"Reset password failed: {str(e)}")
+        return jsonify({"error": "Failed to reset password", "details": str(e)}), 500
+
+@app.route('/api/jobs', methods=['POST', 'OPTIONS'])
+def create_job():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
         if user.role != 'client':
+            logger.error(f"Unauthorized job creation attempt by user ID: {user.id}")
             return jsonify({"error": "Only clients can create jobs"}), 403
 
         data = request.form
         files = request.files.getlist('files')
-        payment_intent_id = data.get('payment_intent_id')
-
-        if not payment_intent_id:
-            return jsonify({"error": "Payment intent ID is required"}), 400
-
-        try:
-            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-            if payment_intent.status != 'succeeded':
-                return jsonify({"error": "Payment not successful"}), 400
-        except stripe.error.StripeError as e:
-            return jsonify({"error": "Invalid payment intent"}), 400
-
+        logger.info(f"Creating job for user ID: {user.id}")
         if not all([data.get('subject'), data.get('title'), data.get('pages'), data.get('deadline'), data.get('instructions')]):
+            logger.error("Missing required job fields")
             return jsonify({"error": "All required fields must be provided"}), 400
 
         file_paths = []
@@ -346,7 +555,8 @@ def create_app():
                 file_paths.append(filename)
 
         job = Job(
-            user_id=user_id,
+            user_id=user.id,
+            client_name=user.name,
             subject=data['subject'],
             title=data['title'],
             pages=int(data['pages']),
@@ -359,14 +569,14 @@ def create_app():
             total_amount=float(data['totalAmount']),
             status='Pending',
             files=file_paths,
+            completed_files=[],
             client_email=user.email
         )
 
         db.session.add(job)
         db.session.commit()
 
-        # Send email notification to admin
-        admin_email = os.getenv('ADMIN_EMAIL', 'admin@example.com')
+        admin_email = os.getenv('ADMIN_EMAIL', 'ellyjames1999@gmail.com')
         msg = Message(
             subject=f"New Job Posted: {job.title}",
             recipients=[admin_email],
@@ -385,76 +595,165 @@ def create_app():
         )
         try:
             mail.send(msg)
+            logger.info(f"Job notification email sent to admin: {admin_email}")
         except Exception as e:
-            print(f"Failed to send email: {e}")
+            logger.error(f"Failed to send job notification email: {str(e)}")
 
+        logger.info(f"Job created successfully: {job.title}")
         return jsonify(job.to_dict()), 201
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
 
-    @app.route('/api/jobs', methods=['GET'])
-    @jwt_required()
-    def get_jobs():
-        from models import Job, User
-        user_id = get_jwt_identity()
-        user = User.query.get_or_404(user_id)
+@app.route('/api/jobs', methods=['GET', 'OPTIONS'])
+def get_jobs():
+    if request.method == 'OPTIONS':
+        return '', 200
 
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
         if user.role == 'admin':
             jobs = Job.query.all()
         else:
-            jobs = Job.query.filter_by(user_id=user_id).all()
+            jobs = Job.query.filter_by(user_id=user.id).all()
 
-        return jsonify([job.to_dict() for job in jobs])
+        logger.info(f"Jobs retrieved for user ID: {user.id}")
+        return jsonify([{
+            **job.to_dict(),
+            'client_name': job.client_name,
+            'client_email': job.client_email
+        } for job in jobs])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
 
-    @app.route('/api/jobs/<int:job_id>', methods=['GET'])
-    @jwt_required()
-    def get_job(job_id):
-        from models import Job, User
-        user_id = get_jwt_identity()
-        user = User.query.get_or_404(user_id)
-        job = Job.query.get_or_404(job_id)
+@app.route('/api/jobs/<int:job_id>', methods=['GET', 'OPTIONS'])
+def get_job(job_id):
+    if request.method == 'OPTIONS':
+        return '', 200
 
-        if user.role != 'admin' and job.user_id != user_id:
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
+        job = db.session.get(Job, job_id)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+
+        if user.role != 'admin' and job.user_id != user.id:
+            logger.error(f"Unauthorized job access attempt by user ID: {user.id} for job ID: {job_id}")
             return jsonify({"error": "Unauthorized"}), 403
 
-        return jsonify(job.to_dict())
+        logger.info(f"Job retrieved: {job_id}")
+        return jsonify({
+            **job.to_dict(),
+            'client_name': job.client_name,
+            'client_email': job.client_email,
+            'messages': [msg.to_dict() for msg in job.messages]
+        })
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
 
-    @app.route('/api/jobs/<int:job_id>', methods=['PUT'])
-    @jwt_required()
-    def update_job(job_id):
-        from models import Job, User
-        user_id = get_jwt_identity()
-        user = User.query.get_or_404(user_id)
-        job = Job.query.get_or_404(job_id)
+@app.route('/api/jobs/<int:job_id>', methods=['PUT', 'OPTIONS'])
+def update_job(job_id):
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
+        job = db.session.get(Job, job_id)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
 
         if user.role != 'admin':
-            return jsonify({"error": "Only admins can update job status"}), 403
+            logger.error(f"Unauthorized job update attempt by user ID: {user.id}")
+            return jsonify({"error": "Only admins can update jobs"}), 403
 
         data = request.get_json()
         if 'status' in data:
             job.status = data['status']
-            job.completed = (data['status'] == 'Completed')
+            if data['status'] == 'Completed':
+                job.completed = True
             db.session.commit()
 
+        logger.info(f"Job updated: {job_id}")
         return jsonify(job.to_dict())
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
 
-    @app.route('/api/jobs/<int:job_id>/messages', methods=['POST'])
-    @jwt_required()
-    def send_message(job_id):
-        from models import Job, Message, User
-        user_id = get_jwt_identity()
-        user = User.query.get_or_404(user_id)
-        job = Job.query.get_or_404(job_id)
+@app.route('/api/jobs/<int:job_id>/messages', methods=['POST', 'OPTIONS'])
+def send_job_message(job_id):
+    if request.method == 'OPTIONS':
+        return '', 200
 
-        if user.role != 'admin' and job.user_id != user_id:
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
+        job = db.session.get(Job, job_id)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+
+        if user.role != 'admin' and job.user_id != user.id:
+            logger.error(f"Unauthorized message attempt by user ID: {user.id} for job ID: {job_id}")
             return jsonify({"error": "Unauthorized"}), 403
 
         data = request.form
         content = data.get('content', '')
         completed_files = request.files.getlist('completed_files')
 
+        logger.info(f"Sending message for job ID: {job_id}")
         if not content and not completed_files:
+            logger.error("Missing message content or completed files")
             return jsonify({"error": "Message content or completed files required"}), 400
 
-        file_paths = job.completed_files or []
+        file_paths = []
         for file in completed_files:
             if file:
                 filename = f"completed-{datetime.now().timestamp()}-{file.filename}"
@@ -463,21 +762,23 @@ def create_app():
 
         message = Message(
             job_id=job_id,
-            sender_id=user_id,
+            sender_id=user.id,
             sender_role=user.role,
-            content=content
+            content=content,
+            files=file_paths
         )
 
         db.session.add(message)
-        job.completed_files = file_paths
-        if completed_files:
+        
+        if file_paths:
+            job.completed_files.extend(file_paths)
             job.status = 'Completed'
             job.completed = True
+        
         db.session.commit()
 
-        # Send email notification to client if admin sends a message
         if user.role == 'admin':
-            client = User.query.get(job.user_id)
+            client = db.session.get(User, job.user_id)
             msg = Message(
                 subject=f"Update on Your Job: {job.title}",
                 recipients=[client.email],
@@ -485,34 +786,196 @@ def create_app():
                 You have a new message regarding your job "{job.title}".
                 
                 Message: {content}
-                Completed Files: {len(completed_files)} attached
-                View details: http://localhost:3000/client-dashboard
+                Completed Files: {len(file_paths)} attached
+                View details: http://localhost:5173/client-dashboard
                 """
             )
             try:
                 mail.send(msg)
+                logger.info(f"Message notification email sent to: {client.email}")
             except Exception as e:
-                print(f"Failed to send email: {e}")
+                logger.error(f"Failed to send message notification email: {str(e)}")
 
+        logger.info(f"Message sent for job ID: {job_id}")
         return jsonify(message.to_dict()), 201
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
 
-    @app.route('/uploads/<filename>', methods=['GET'])
-    @jwt_required()
-    def get_file(filename):
-        from models import Job, User
-        user_id = get_jwt_identity()
-        user = User.query.get_or_404(user_id)
-        if user.role != 'admin' and not Job.query.filter_by(user_id=user_id).filter(
-            (Job.files.contains(filename)) | (Job.completed_files.contains(filename))
-        ).first():
+@app.route('/api/jobs/<int:job_id>/messages', methods=['GET', 'OPTIONS'])
+def get_job_messages(job_id):
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
+        job = db.session.get(Job, job_id)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+
+        if user.role != 'admin' and job.user_id != user.id:
+            logger.error(f"Unauthorized message access attempt by user ID: {user.id} for job ID: {job_id}")
             return jsonify({"error": "Unauthorized"}), 403
+
+        messages = Message.query.filter_by(job_id=job_id).order_by(Message.created_at).all()
+        return jsonify([msg.to_dict() for msg in messages])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+@app.route('/api/messages', methods=['POST', 'OPTIONS'])
+def send_message():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
+        data = request.form
+        content = data.get('content', '')
+
+        if not content:
+            logger.error("Missing message content")
+            return jsonify({"error": "Message content required"}), 400
+
+        message = Message(
+            sender_id=user.id,
+            sender_role=user.role,
+            content=content,
+            files=[]
+        )
+
+        db.session.add(message)
+        db.session.commit()
+
+        if user.role == 'client':
+            admin_email = os.getenv('ADMIN_EMAIL', 'ellyjames1999@gmail.com')
+            msg = Message(
+                subject=f"New Message from Client: {user.email}",
+                recipients=[admin_email],
+                body=f"""
+                You have a new message from {user.email}.
+                
+                Message: {content}
+                View details: http://localhost:5173/admin-dashboard
+                """
+            )
+            try:
+                mail.send(msg)
+                logger.info(f"Message notification email sent to admin: {admin_email}")
+            except Exception as e:
+                logger.error(f"Failed to send message notification email: {str(e)}")
+
+        if user.role == 'admin':
+            clients = User.query.filter_by(role='client').all()
+            for client in clients:
+                msg = Message(
+                    subject="New Message from Admin",
+                    recipients=[client.email],
+                    body=f"""
+                    You have a new message from the admin.
+                    
+                    Message: {content}
+                    View details: http://localhost:5173/client-dashboard
+                    """
+                )
+                try:
+                    mail.send(msg)
+                    logger.info(f"Message notification email sent to: {client.email}")
+                except Exception as e:
+                    logger.error(f"Failed to send message notification email: {str(e)}")
+
+        logger.info(f"Message sent by user ID: {user.id}")
+        return jsonify(message.to_dict()), 201
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+@app.route('/api/messages', methods=['GET', 'OPTIONS'])
+def get_messages():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
+        messages = Message.query.filter((Message.job_id.is_(None))).order_by(Message.created_at).all()
+        return jsonify([msg.to_dict() for msg in messages])
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+@app.route('/uploads/<filename>', methods=['GET', 'OPTIONS'])
+def get_file(filename):
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
+        if user.role == 'admin':
+            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        
+        job = Job.query.filter(
+            (Job.user_id == user.id) & 
+            ((Job.files.contains(filename)) | (Job.completed_files.contains(filename)))
+        ).first()
+        
+        if not job:
+            logger.error(f"Unauthorized file access attempt by user ID: {user.id} for filename: {filename}")
+            return jsonify({"error": "Unauthorized"}), 403
+            
+        logger.info(f"File retrieved: {filename}")
         return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-    return app
-
-app = create_app()
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=True, port=5000)

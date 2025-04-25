@@ -5,38 +5,9 @@ import 'react-datepicker/dist/react-datepicker.css';
 import Select from 'react-select';
 import countryList from 'react-select-country-list';
 import Header from '../Header/Header.jsx';
-import Footer from '../Footer/Footer.jsx';
 import api from '../../utils/api.js';
 import { AuthContext } from '../context/AuthContext.jsx';
 import './ClientDashboard.css';
-
-// Mock data for testing
-const mockJobs = [
-  {
-    id: 1,
-    title: 'Sample Essay on History',
-    subject: 'History',
-    pages: 5,
-    deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'Pending',
-    instructions: 'Write a detailed essay on World War II.',
-    files: [],
-    completed_files: [],
-    messages: [],
-  },
-  {
-    id: 2,
-    title: 'Math Assignment',
-    subject: 'Maths',
-    pages: 3,
-    deadline: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'In Progress',
-    instructions: 'Solve calculus problems.',
-    files: [],
-    completed_files: [],
-    messages: [],
-  },
-];
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
@@ -60,73 +31,79 @@ const ClientDashboard = () => {
   const [country, setCountry] = useState(null);
   const [postalCode, setPostalCode] = useState('');
 
-  const [activeJobs, setActiveJobs] = useState(mockJobs);
+  const [activeJobs, setActiveJobs] = useState([]);
   const [completedJobs, setCompletedJobs] = useState([]);
   const [currentTab, setCurrentTab] = useState('newOrder');
   const [selectedJob, setSelectedJob] = useState(null);
-  const [adminMessages, setAdminMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [editingMessageId, setEditingMessageId] = useState(null);
-  const [editedMessageContent, setEditedMessageContent] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newChatMessage, setNewChatMessage] = useState('');
 
-  // Extract user's name from email
-  const userName = user?.email
-    ? (() => {
-        const namePart = user.email.split('@')[0];
-        const name = namePart
-          .replace(/[^a-zA-Z]/g, ' ') // Replace numbers or special chars with spaces
-          .split(' ')
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
-        return name;
-      })()
-    : 'User';
-
-  // Get country list for react-select
   const countryOptions = useMemo(() => countryList().getData(), []);
 
   useEffect(() => {
     if (!user || role !== 'client') {
       navigate('/auth');
     } else {
-      setActiveJobs(mockJobs);
-      fetchAdminMessages();
+      fetchJobs();
+      fetchChatMessages();
     }
   }, [user, role, navigate]);
 
-  const fetchAdminMessages = async () => {
+  const fetchJobs = async () => {
     try {
-      const response = await api.get('/api/messages/admin', {
-        params: { userId: user.id },
-      });
-      setAdminMessages(response.data);
+      const response = await api.get('/api/jobs');
+      const jobs = response.data;
+      setActiveJobs(jobs.filter(job => job.status !== 'Completed'));
+      setCompletedJobs(jobs.filter(job => job.status === 'Completed'));
     } catch (error) {
-      console.error('Failed to fetch admin messages:', error);
+      console.error('Failed to fetch jobs:', error);
     }
   };
 
-  const handlePostJob = async (e) => {
-    e.preventDefault(); // Prevent page reload
+  const fetchChatMessages = async () => {
     try {
-      const newJob = {
-        id: activeJobs.length + 1,
-        subject,
-        title,
-        pages,
-        deadline: deadline.toISOString(),
-        instructions,
-        cited_resources: citedResources,
-        formatting_style: formattingStyle,
-        writer_level: writerLevel,
-        spacing,
-        status: 'Pending',
-        files: files.map((file) => file.name),
-        completed_files: [],
-        messages: [],
-      };
-      setActiveJobs([...activeJobs, newJob]);
-      alert('Job posted successfully! (Simulated)');
-      // Clear form fields
+      const response = await api.get('/api/messages');
+      setChatMessages(response.data);
+    } catch (error) {
+      console.error('Failed to fetch chat messages:', error);
+    }
+  };
+
+  const calculateTotalAmount = () => {
+    const wordsPerPage = spacing === 'single' ? 550 : 275;
+    const ratePerWord = {
+      PHD: 0.15,
+      Masters: 0.12,
+      Undergraduate: 0.10,
+      'High School': 0.08,
+      Primary: 0.05,
+    }[writerLevel] || 0.10;
+    return (pages * wordsPerPage * ratePerWord).toFixed(2);
+  };
+
+  const handlePostJob = async (e) => {
+    e.preventDefault();
+    try {
+      const totalAmount = calculateTotalAmount();
+
+      const formData = new FormData();
+      formData.append('subject', subject);
+      formData.append('title', title);
+      formData.append('pages', pages);
+      formData.append('deadline', deadline.toISOString());
+      formData.append('instructions', instructions);
+      formData.append('citedResources', citedResources);
+      formData.append('formattingStyle', formattingStyle);
+      formData.append('writerLevel', writerLevel);
+      formData.append('spacing', spacing);
+      formData.append('totalAmount', totalAmount);
+      files.forEach(file => formData.append('files', file));
+
+      await api.post('/api/jobs', formData);
+      alert('Job posted successfully!');
+
+      // Clear form
       setSubject('');
       setTitle('');
       setPages(1);
@@ -145,32 +122,32 @@ const ClientDashboard = () => {
       setCountry(null);
       setPostalCode('');
       setCurrentTab('activeJobs');
+      fetchJobs();
     } catch (error) {
       console.error('Failed to post job:', error);
       alert('Failed to post job. Please try again.');
     }
   };
 
-  const viewJobDetails = (jobId) => {
-    const job = activeJobs.find((j) => j.id === jobId) || completedJobs.find((j) => j.id === jobId);
-    if (job) {
-      setSelectedJob(job);
+  const viewJobDetails = async (jobId) => {
+    try {
+      const response = await api.get(`/api/jobs/${jobId}`);
+      setSelectedJob(response.data);
       setCurrentTab('jobDetails');
+      setNewMessage('');
+    } catch (error) {
+      console.error('Failed to fetch job details:', error);
     }
   };
 
-  const sendAdminMessage = async () => {
+  const sendMessage = async () => {
     if (!newMessage.trim()) return;
     try {
-      const message = {
-        sender_id: user.id,
-        sender_role: 'client',
-        receiver_id: 'admin',
-        content: newMessage,
-        created_at: new Date().toISOString(),
-      };
-      const response = await api.post('/api/messages', message);
-      setAdminMessages([...adminMessages, response.data]);
+      const formData = new FormData();
+      formData.append('content', newMessage);
+      await api.post(`/api/jobs/${selectedJob.id}/messages`, formData);
+      const response = await api.get(`/api/jobs/${selectedJob.id}`);
+      setSelectedJob(response.data);
       setNewMessage('');
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -178,51 +155,17 @@ const ClientDashboard = () => {
     }
   };
 
-  const startEditingMessage = (message) => {
-    setEditingMessageId(message.id);
-    setEditedMessageContent(message.content);
-  };
-
-  const saveEditedMessage = async (messageId) => {
+  const sendChatMessage = async () => {
+    if (!newChatMessage.trim()) return;
     try {
-      const updatedMessage = {
-        content: editedMessageContent,
-      };
-      await api.put(`/api/messages/${messageId}`, updatedMessage);
-      setAdminMessages(
-        adminMessages.map((msg) =>
-          msg.id === messageId ? { ...msg, content: editedMessageContent } : msg
-        )
-      );
-      setEditingMessageId(null);
-      setEditedMessageContent('');
+      const formData = new FormData();
+      formData.append('content', newChatMessage);
+      await api.post('/api/messages', formData);
+      setNewChatMessage('');
+      fetchChatMessages();
     } catch (error) {
-      console.error('Failed to edit message:', error);
-      alert('Failed to edit message. Please try again.');
-    }
-  };
-
-  const deleteMessage = async (messageId) => {
-    try {
-      await api.delete(`/api/messages/${messageId}`);
-      setAdminMessages(adminMessages.filter((msg) => msg.id !== messageId));
-    } catch (error) {
-      console.error('Failed to delete message:', error);
-      alert('Failed to delete message. Please try again.');
-    }
-  };
-
-  const deleteAllMessages = async () => {
-    if (window.confirm('Are you sure you want to delete all messages with the admin?')) {
-      try {
-        await api.delete('/api/messages/admin', {
-          params: { userId: user.id },
-        });
-        setAdminMessages([]);
-      } catch (error) {
-        console.error('Failed to delete all messages:', error);
-        alert('Failed to delete all messages. Please try again.');
-      }
+      console.error('Failed to send chat message:', error);
+      alert('Failed to send chat message. Please try again.');
     }
   };
 
@@ -267,7 +210,7 @@ const ClientDashboard = () => {
           <div className="dashboard-header">
             <h1>Client Dashboard</h1>
             <div className="user-info">
-              <p>Welcome, {userName}</p>
+              <p>Welcome, {user?.name}</p>
             </div>
           </div>
 
@@ -289,6 +232,12 @@ const ClientDashboard = () => {
               onClick={() => setCurrentTab('completedJobs')}
             >
               Completed Jobs ({completedJobs.length})
+            </button>
+            <button
+              className={currentTab === 'chat' ? 'tab-active' : ''}
+              onClick={() => setCurrentTab('chat')}
+            >
+              Chat with Admin
             </button>
           </div>
 
@@ -651,95 +600,146 @@ const ClientDashboard = () => {
                 <p>Pages: {selectedJob.pages}</p>
                 <p>Deadline: {new Date(selectedJob.deadline).toLocaleString()}</p>
                 <p>Instructions: {selectedJob.instructions}</p>
+                <p>Formatting Style: {selectedJob.formatting_style}</p>
+                <p>Writer Level: {selectedJob.writer_level}</p>
+                <p>Spacing: {selectedJob.spacing}</p>
+                <p>Cited Resources: {selectedJob.cited_resources}</p>
                 <p>Status: {selectedJob.status}</p>
+
                 {selectedJob.files?.length > 0 && (
                   <div>
                     <h4>Uploaded Files:</h4>
                     <ul>
                       {selectedJob.files.map((file, index) => (
                         <li key={index}>
-                          <a href={`#`} target="_blank" rel="noopener noreferrer">
-                            File {index + 1}
+                          <a
+                            href={`http://localhost:5000/uploads/${file}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                          >
+                            Download File {index + 1}
                           </a>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
+
                 {selectedJob.completed_files?.length > 0 && (
                   <div>
                     <h4>Completed Work:</h4>
                     <ul>
                       {selectedJob.completed_files.map((file, index) => (
                         <li key={index}>
-                          <a href={`#`} target="_blank" rel="noopener noreferrer">
-                            Completed File {index + 1}
+                          <a
+                            href={`http://localhost:5000/uploads/${file}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                          >
+                            Download Completed File {index + 1}
                           </a>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
+
+                <div className="messages-section">
+                  <h3>Communication with Admin</h3>
+                  {selectedJob.messages?.length > 0 ? (
+                    selectedJob.messages.map((msg, index) => (
+                      <div
+                        key={index}
+                        className={`message ${msg.sender_role === 'client' ? 'message-sent' : 'message-received'}`}
+                      >
+                        <p><strong>{msg.sender_role === 'client' ? 'You' : 'Admin'}:</strong> {msg.content}</p>
+                        {msg.files?.length > 0 && (
+                          <div className="message-files">
+                            <p>Attachments:</p>
+                            <ul>
+                              {msg.files.map((file, i) => (
+                                <li key={i}>
+                                  <a
+                                    href={`http://localhost:5000/uploads/${file}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download
+                                  >
+                                    Download File {i + 1}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <small>{new Date(msg.created_at).toLocaleString()}</small>
+                      </div>
+                    ))
+                  ) : (
+                    <p>No messages yet. Start the conversation.</p>
+                  )}
+
+                  <div className="message-input">
+                    <h4>Send Message to Admin</h4>
+                    <textarea
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Type your message to the admin..."
+                      rows="4"
+                    />
+                    <button
+                      onClick={sendMessage}
+                      disabled={!newMessage.trim()}
+                    >
+                      Send Message
+                    </button>
+                  </div>
+                </div>
               </div>
               <button onClick={() => setCurrentTab('activeJobs')}>Back to Jobs</button>
             </div>
           )}
-        </div>
 
-        <div className="admin-chat">
-          <h3>Chat with Admin</h3>
-          <div className="admin-messages">
-            {adminMessages.length > 0 ? (
-              adminMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`message ${
-                    msg.sender_role === 'client' ? 'message-sent' : 'message-received'
-                  }`}
-                >
-                  {editingMessageId === msg.id ? (
-                    <div className="edit-message">
-                      <textarea
-                        value={editedMessageContent}
-                        onChange={(e) => setEditedMessageContent(e.target.value)}
-                      />
-                      <div className="edit-actions">
-                        <button onClick={() => saveEditedMessage(msg.id)}>Save</button>
-                        <button onClick={() => setEditingMessageId(null)}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p>{msg.content}</p>
+          {currentTab === 'chat' && (
+            <div className="chat-section">
+              <h2>Chat with Admin</h2>
+              <div className="messages-section">
+                {chatMessages.length > 0 ? (
+                  chatMessages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`message ${msg.sender_role === 'client' ? 'message-sent' : 'message-received'}`}
+                    >
+                      <p><strong>{msg.sender_role === 'client' ? 'You' : 'Admin'}:</strong> {msg.content}</p>
                       <small>{new Date(msg.created_at).toLocaleString()}</small>
-                      {msg.sender_role === 'client' && (
-                        <div className="message-actions">
-                          <button onClick={() => startEditingMessage(msg)}>Edit</button>
-                          <button onClick={() => deleteMessage(msg.id)}>Delete</button>
-                        </div>
-                      )}
-                    </>
-                  )}
+                    </div>
+                  ))
+                ) : (
+                  <p>No messages yet. Start the conversation.</p>
+                )}
+
+                <div className="message-input">
+                  <h4>Send Message to Admin</h4>
+                  <textarea
+                    value={newChatMessage}
+                    onChange={(e) => setNewChatMessage(e.target.value)}
+                    placeholder="Type your message to the admin..."
+                    rows="4"
+                  />
+                  <button
+                    onClick={sendChatMessage}
+                    disabled={!newChatMessage.trim()}
+                  >
+                    Send Message
+                  </button>
                 </div>
-              ))
-            ) : (
-              <p>No messages yet.</p>
-            )}
-          </div>
-          <div className="message-input">
-            <textarea
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type your message..."
-            />
-            <button onClick={sendAdminMessage}>Send</button>
-          </div>
-          <button className="auth-button delete-all-messages" onClick={deleteAllMessages}>
-            Delete All Messages
-          </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      <Footer />
     </>
   );
 };

@@ -1,25 +1,27 @@
-from datetime import datetime
 from extensions import db, bcrypt
+from datetime import datetime
 
 class User(db.Model):
-    __tablename__ = 'users'
-    
+    """User model for storing user information."""
+    __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(100), unique=True, nullable=False)
-    username = db.Column(db.String(100), unique=True, nullable=False)
-    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    name = db.Column(db.String(120), nullable=False)
     password_hash = db.Column(db.String(128))
-    role = db.Column(db.String(20), nullable=False, default='client')
+    role = db.Column(db.String(50), default='client')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    jobs = db.relationship('Job', backref='user', lazy=True)
+    messages = db.relationship('Message', backref='sender', lazy=True)
+    reset_tokens = db.relationship('ResetToken', backref='user', lazy=True)
+
     def set_password(self, password):
-        if password:
-            self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
 
     def check_password(self, password):
-        if not self.password_hash:
-            return False
-        return bcrypt.check_password_hash(self.password_hash, password)
+        return bcrypt.check_password_hash(self.password_hash, password) if self.password_hash else False
 
     def to_dict(self):
         return {
@@ -27,14 +29,18 @@ class User(db.Model):
             'email': self.email,
             'username': self.username,
             'name': self.name,
-            'role': self.role
+            'role': self.role,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
         }
 
 class Job(db.Model):
-    __tablename__ = 'jobs'
-    
+    """Job model for storing job order details."""
+    __tablename__ = 'job'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    client_name = db.Column(db.String(120), nullable=True)  # Changed to nullable=True
+    client_email = db.Column(db.String(120), nullable=True)  # Changed to nullable=True
     subject = db.Column(db.String(100), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     pages = db.Column(db.Integer, nullable=False)
@@ -43,19 +49,23 @@ class Job(db.Model):
     cited_resources = db.Column(db.Integer, default=0)
     formatting_style = db.Column(db.String(50), default='APA')
     writer_level = db.Column(db.String(50), default='PHD')
-    spacing = db.Column(db.String(20), default='double')
+    spacing = db.Column(db.String(50), default='double')
     total_amount = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(50), default='Pending')
-    completed = db.Column(db.Boolean, default=False)
     files = db.Column(db.JSON, default=list)
     completed_files = db.Column(db.JSON, default=list)
-    client_email = db.Column(db.String(100), nullable=False)
+    completed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages = db.relationship('Message', backref='job', lazy=True, cascade='all, delete-orphan')
+
     def to_dict(self):
         return {
             'id': self.id,
             'user_id': self.user_id,
+            'client_name': self.client_name,
+            'client_email': self.client_email,
             'subject': self.subject,
             'title': self.title,
             'pages': self.pages,
@@ -67,24 +77,42 @@ class Job(db.Model):
             'spacing': self.spacing,
             'total_amount': self.total_amount,
             'status': self.status,
-            'completed': self.completed,
             'files': self.files,
             'completed_files': self.completed_files,
-            'client_email': self.client_email,
+            'completed': self.completed,
             'created_at': self.created_at.isoformat(),
-            'messages': [msg.to_dict() for msg in Message.query.filter_by(job_id=self.id).all()]
+            'updated_at': self.updated_at.isoformat()
+        }
+
+class ResetToken(db.Model):
+    """ResetToken model for storing password reset tokens."""
+    __tablename__ = 'reset_token'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(36), unique=True, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'token': self.token,
+            'expires_at': self.expires_at.isoformat(),
+            'created_at': self.created_at.isoformat()
         }
 
 class Message(db.Model):
-    __tablename__ = 'messages'
-    
+    """Message model for storing communication related to jobs."""
+    __tablename__ = 'message'
     id = db.Column(db.Integer, primary_key=True)
-    job_id = db.Column(db.Integer, db.ForeignKey('jobs.id'), nullable=False)
-    sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    sender_role = db.Column(db.String(20), nullable=False)
-    content = db.Column(db.Text, nullable=False)
+    job_id = db.Column(db.Integer, db.ForeignKey('job.id'))
+    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    sender_role = db.Column(db.String(50), nullable=False)
+    content = db.Column(db.Text, nullable=True)  # Changed to nullable=True
+    files = db.Column(db.JSON, default=list)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -92,5 +120,6 @@ class Message(db.Model):
             'sender_id': self.sender_id,
             'sender_role': self.sender_role,
             'content': self.content,
+            'files': self.files,
             'created_at': self.created_at.isoformat()
         }

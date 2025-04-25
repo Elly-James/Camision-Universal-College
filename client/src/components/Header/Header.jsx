@@ -5,7 +5,7 @@ import './Header.css';
 
 const Header = () => {
   const navigate = useNavigate();
-  const { user, logout } = useContext(AuthContext);
+  const { user, role, logout } = useContext(AuthContext);
 
   const handleAuthAction = () => {
     if (user) {
@@ -36,13 +36,23 @@ const Header = () => {
                 Home
               </NavLink>
             </li>
-            {user && (
+            {user && role === 'client' && (
               <li className="navItem">
                 <NavLink
                   to="/client-dashboard"
                   className={({ isActive }) => `navLink ${isActive ? 'activeLink' : ''}`}
                 >
                   Client Dashboard
+                </NavLink>
+              </li>
+            )}
+            {user && role === 'admin' && (
+              <li className="navItem">
+                <NavLink
+                  to="/admin-dashboard"
+                  className={({ isActive }) => `navLink ${isActive ? 'activeLink' : ''}`}
+                >
+                  Admin Dashboard
                 </NavLink>
               </li>
             )}
