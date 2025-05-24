@@ -1,5 +1,5 @@
 import os
-from datetime import timedelta  # Added import for timedelta
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,8 +9,9 @@ class Config:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
-    UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
+    UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'Uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB upload limit
+    FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
     
     # Mail configuration
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
@@ -27,6 +28,8 @@ class Config:
 class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_ECHO = False  # Log SQL queries
+    # Increase rate limits for development
+    RATE_LIMITS = ["1000 per day", "200 per hour"]
 
 class ProductionConfig(Config):
     DEBUG = False
@@ -36,6 +39,7 @@ class ProductionConfig(Config):
         'pool_size': 10,
         'max_overflow': 20,
     }
+    RATE_LIMITS = ["200 per day", "50 per hour"]
 
 config = {
     'development': DevelopmentConfig,
