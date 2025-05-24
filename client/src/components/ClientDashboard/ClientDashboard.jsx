@@ -1,18 +1,33 @@
-import React, { useState, useEffect, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Select from 'react-select';
 import countryList from 'react-select-country-list';
 import Header from '../Header/Header.jsx';
-import api from '../../utils/api.js';
 import { AuthContext } from '../context/AuthContext.jsx';
+import { 
+  getCurrentUser, 
+  createJob, 
+  getJobs, 
+  getJob, 
+  sendMessage, 
+  getMessages, 
+  editMessage, 
+  deleteMessage, 
+  getSocketJobs, 
+  getSocketMessages,
+  getFile 
+} from '../../utils/api.js';
+import toast from 'react-hot-toast';
 import './ClientDashboard.css';
+import { FaTrash, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
-  const { user, role } = useContext(AuthContext);
+  const { user, role, token } = useContext(AuthContext);
 
+  // Form states
   const [subject, setSubject] = useState('');
   const [title, setTitle] = useState('');
   const [pages, setPages] = useState(1);
@@ -30,14 +45,23 @@ const ClientDashboard = () => {
   const [lastName, setLastName] = useState('');
   const [country, setCountry] = useState(null);
   const [postalCode, setPostalCode] = useState('');
+  const [additionalFiles, setAdditionalFiles] = useState([]);
 
+  // Dashboard states
   const [activeJobs, setActiveJobs] = useState([]);
   const [completedJobs, setCompletedJobs] = useState([]);
   const [currentTab, setCurrentTab] = useState('newOrder');
   const [selectedJob, setSelectedJob] = useState(null);
-  const [newMessage, setNewMessage] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
   const [newChatMessage, setNewChatMessage] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editedMessageContent, setEditedMessageContent] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [hiddenMessageIds, setHiddenMessageIds] = useState(() => {
+    const stored = localStorage.getItem('hiddenMessageIds');
+    return stored ? JSON.parse(stored) : [];
+  });
 
   const countryOptions = useMemo(() => countryList().getData(), []);
 
@@ -45,28 +69,101 @@ const ClientDashboard = () => {
     if (!user || role !== 'client') {
       navigate('/auth');
     } else {
-      fetchJobs();
-      fetchChatMessages();
+      fetchData();
     }
-  }, [user, role, navigate]);
 
-  const fetchJobs = async () => {
-    try {
-      const response = await api.get('/api/jobs');
-      const jobs = response.data;
-      setActiveJobs(jobs.filter(job => job.status !== 'Completed'));
-      setCompletedJobs(jobs.filter(job => job.status === 'Completed'));
-    } catch (error) {
-      console.error('Failed to fetch jobs:', error);
+    const socketJobs = getSocketJobs();
+    const socketMessages = getSocketMessages();
+
+    if (socketJobs) {
+      socketJobs.on('new_job', (job) => {
+        if (job.user_id === user.id) {
+          setActiveJobs((prev) => [...prev, job]);
+          toast.success('New job posted');
+        }
+      });
+      socketJobs.on('job_updated', (job) => {
+        setActiveJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+        setCompletedJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+        if (selectedJob && selectedJob.id === job.id) {
+          setSelectedJob(job);
+        }
+        toast.success('Job updated');
+      });
     }
-  };
 
-  const fetchChatMessages = async () => {
+    if (socketMessages) {
+      socketMessages.on('new_general_message', (message) => {
+        if (!hiddenMessageIds.includes(message.id) && message.client_id === user.id) {
+          setChatMessages((prev) => [...prev, message]);
+          if (selectedJob) {
+            setSelectedJob((prev) => ({
+              ...prev,
+              messages: [...(prev.messages || []), message],
+            }));
+          }
+          toast.success('New message received');
+        }
+      });
+      socketMessages.on('message_updated', (message) => {
+        if (!hiddenMessageIds.includes(message.id) && message.client_id === user.id) {
+          setChatMessages((prev) => prev.map((m) => (m.id === message.id ? message : m)));
+          if (selectedJob) {
+            setSelectedJob((prev) => ({
+              ...prev,
+              messages: prev.messages.map((m) => (m.id === message.id ? message : m)),
+            }));
+          }
+          toast.success('Message updated');
+        }
+      });
+      socketMessages.on('message_deleted', ({ message_id, client_id }) => {
+        if (client_id === user.id) {
+          setChatMessages((prev) => prev.filter((m) => m.id !== message_id));
+          setHiddenMessageIds((prev) => {
+            const updated = [...prev, message_id];
+            localStorage.setItem('hiddenMessageIds', JSON.stringify(updated));
+            return updated;
+          });
+          if (selectedJob) {
+            setSelectedJob((prev) => ({
+              ...prev,
+              messages: prev.messages.filter((m) => m.id !== message_id),
+            }));
+          }
+          toast.success('Message deleted');
+        }
+      });
+    }
+
+    return () => {
+      if (socketJobs) {
+        socketJobs.off('new_job');
+        socketJobs.off('job_updated');
+      }
+      if (socketMessages) {
+        socketMessages.off('new_general_message');
+        socketMessages.off('message_updated');
+        socketMessages.off('message_deleted');
+      }
+    };
+  }, [user, role, navigate, selectedJob, hiddenMessageIds]);
+
+  const fetchData = async () => {
     try {
-      const response = await api.get('/api/messages');
-      setChatMessages(response.data);
+      const [userData, jobsData, messagesData] = await Promise.all([
+        getCurrentUser(),
+        getJobs(),
+        getMessages(),
+      ]);
+      setActiveJobs(jobsData.filter((job) => job.status !== 'Completed'));
+      setCompletedJobs(jobsData.filter((job) => job.status === 'Completed'));
+      setChatMessages(messagesData.filter((msg) => !hiddenMessageIds.includes(msg.id)));
     } catch (error) {
-      console.error('Failed to fetch chat messages:', error);
+      toast.error(error.message || 'Failed to load data');
+      if (error.message.includes('Token')) {
+        navigate('/auth');
+      }
     }
   };
 
@@ -82,16 +179,42 @@ const ClientDashboard = () => {
     return (pages * wordsPerPage * ratePerWord).toFixed(2);
   };
 
+  const resetForm = () => {
+    setSubject('');
+    setTitle('');
+    setPages(1);
+    setDeadline(new Date());
+    setInstructions('');
+    setCitedResources(0);
+    setFormattingStyle('APA');
+    setWriterLevel('PHD');
+    setSpacing('double');
+    setFiles([]);
+    setCardNumber('');
+    setExpiryDate('');
+    setCvc('');
+    setFirstName('');
+    setLastName('');
+    setCountry(null);
+    setPostalCode('');
+  };
+
   const handlePostJob = async (e) => {
     e.preventDefault();
+    const currentDate = new Date();
+    if (deadline <= currentDate) {
+      toast.error('Deadline must be in the future');
+      return;
+    }
     try {
       const totalAmount = calculateTotalAmount();
-
       const formData = new FormData();
+      
       formData.append('subject', subject);
       formData.append('title', title);
       formData.append('pages', pages);
-      formData.append('deadline', deadline.toISOString());
+      const deadlineISO = deadline.toISOString();
+      formData.append('deadline', deadlineISO);
       formData.append('instructions', instructions);
       formData.append('citedResources', citedResources);
       formData.append('formattingStyle', formattingStyle);
@@ -99,86 +222,187 @@ const ClientDashboard = () => {
       formData.append('spacing', spacing);
       formData.append('totalAmount', totalAmount);
       files.forEach(file => formData.append('files', file));
+      if (token) formData.append('token', token);
 
-      await api.post('/api/jobs', formData);
-      alert('Job posted successfully!');
-
-      // Clear form
-      setSubject('');
-      setTitle('');
-      setPages(1);
-      setDeadline(new Date());
-      setInstructions('');
-      setCitedResources(0);
-      setFormattingStyle('APA');
-      setWriterLevel('PHD');
-      setSpacing('double');
-      setFiles([]);
-      setCardNumber('');
-      setExpiryDate('');
-      setCvc('');
-      setFirstName('');
-      setLastName('');
-      setCountry(null);
-      setPostalCode('');
+      const response = await createJob(formData);
+      toast.success('Job posted successfully!');
+      resetForm();
+      await fetchData();
       setCurrentTab('activeJobs');
-      fetchJobs();
     } catch (error) {
-      console.error('Failed to post job:', error);
-      alert('Failed to post job. Please try again.');
+      toast.error(error.response?.data?.error || error.message || 'Failed to post job');
     }
   };
 
   const viewJobDetails = async (jobId) => {
     try {
-      const response = await api.get(`/api/jobs/${jobId}`);
-      setSelectedJob(response.data);
+      const job = await getJob(jobId);
+      setSelectedJob({
+        ...job,
+        messages: job.messages.filter(msg => !hiddenMessageIds.includes(msg.id)),
+      });
       setCurrentTab('jobDetails');
-      setNewMessage('');
+      setAdditionalFiles([]);
     } catch (error) {
-      console.error('Failed to fetch job details:', error);
+      toast.error(error.message || 'Job not found');
     }
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+  const downloadFile = async (filename) => {
+    setIsDownloading(true);
     try {
-      const formData = new FormData();
-      formData.append('content', newMessage);
-      await api.post(`/api/jobs/${selectedJob.id}/messages`, formData);
-      const response = await api.get(`/api/jobs/${selectedJob.id}`);
-      setSelectedJob(response.data);
-      setNewMessage('');
+      // Ensure filename is correctly formatted
+      const normalizedFilename = filename.replace(/\\/g, '/');
+      await getFile(normalizedFilename);
+      toast.success('File downloaded successfully!');
     } catch (error) {
-      console.error('Failed to send message:', error);
-      alert('Failed to send message. Please try again.');
+      toast.error(error.message || 'Failed to download file');
+      console.error('Download error:', error);
+    } finally {
+      setIsDownloading(false);
     }
   };
 
-  const sendChatMessage = async () => {
-    if (!newChatMessage.trim()) return;
+  const sendAdditionalFiles = async () => {
+    if (additionalFiles.length === 0) {
+      toast.error('Please select files to upload');
+      return;
+    }
+    setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append('content', newChatMessage);
-      await api.post('/api/messages', formData);
-      setNewChatMessage('');
-      fetchChatMessages();
+      additionalFiles.forEach(file => formData.append('files', file));
+      if (token) formData.append('token', token);
+      formData.append('content', 'Additional files uploaded');
+
+      await sendMessage(formData, selectedJob.id);
+      const updatedJob = await getJob(selectedJob.id);
+      setSelectedJob({
+        ...updatedJob,
+        messages: updatedJob.messages.filter(msg => !hiddenMessageIds.includes(msg.id)),
+      });
+      setAdditionalFiles([]);
+      toast.success('Additional files uploaded successfully!');
     } catch (error) {
-      console.error('Failed to send chat message:', error);
-      alert('Failed to send chat message. Please try again.');
+      toast.error(error.message || 'Failed to upload additional files');
+    } finally {
+      setIsUploading(false);
     }
+  };
+
+  const sendChatMessage = useCallback(async (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+    }
+    if ((e.type === 'click' || (e.key === 'Enter' && !e.shiftKey)) && newChatMessage.trim()) {
+      try {
+        const formData = new FormData();
+        formData.append('content', newChatMessage);
+        if (token) formData.append('token', token);
+
+        await sendMessage(formData);
+        setNewChatMessage('');
+        const messages = await getMessages();
+        setChatMessages(messages.filter((msg) => !hiddenMessageIds.includes(msg.id)));
+        toast.success('Message sent successfully!');
+      } catch (error) {
+        toast.error(error.message || 'Failed to send message');
+      }
+    }
+  }, [newChatMessage, token, hiddenMessageIds]);
+
+  const clearChatHistory = async () => {
+    if (!window.confirm('Are you sure you want to clear all chat history?')) return;
+    try {
+      const clientMessages = chatMessages.filter((msg) => msg.sender_role === 'client');
+      await Promise.all(clientMessages.map((msg) => deleteMessage(msg.id)));
+      const allMessageIds = chatMessages.map((msg) => msg.id);
+      setHiddenMessageIds(allMessageIds);
+      localStorage.setItem('hiddenMessageIds', JSON.stringify(allMessageIds));
+      setChatMessages([]);
+      if (selectedJob) {
+        setSelectedJob((prev) => ({
+          ...prev,
+          messages: prev.messages.filter((msg) => msg.sender_role !== 'client'),
+        }));
+      }
+      toast.success('Chat history cleared successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to clear chat history');
+    }
+  };
+
+  const saveEditedMessage = async (messageId) => {
+    if (!editedMessageContent.trim()) {
+      toast.error('Message cannot be empty');
+      return;
+    }
+    try {
+      await editMessage(messageId, editedMessageContent);
+      setEditingMessageId(null);
+      setEditedMessageContent('');
+      const messages = await getMessages();
+      setChatMessages(messages.filter((msg) => !hiddenMessageIds.includes(msg.id)));
+      if (selectedJob) {
+        const updatedJob = await getJob(selectedJob.id);
+        setSelectedJob({
+          ...updatedJob,
+          messages: updatedJob.messages.filter(msg => !hiddenMessageIds.includes(msg.id)),
+        });
+      }
+      toast.success('Message updated successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to edit message');
+    }
+  };
+
+  const deleteChatMessage = async (messageId) => {
+    if (!window.confirm('Are you sure you want to delete this message?')) return;
+    try {
+      await deleteMessage(messageId);
+      setHiddenMessageIds((prev) => {
+        const updated = [...prev, messageId];
+        localStorage.setItem('hiddenMessageIds', JSON.stringify(updated));
+        return updated;
+      });
+      setChatMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+      if (selectedJob) {
+        setSelectedJob((prev) => ({
+          ...prev,
+          messages: prev.messages.filter((msg) => msg.id !== messageId),
+        }));
+      }
+      toast.success('Message deleted successfully!');
+    } catch (error) {
+      toast.error(error.message || 'Failed to delete message');
+    }
+  };
+
+  const startEditingMessage = (message) => {
+    setEditingMessageId(message.id);
+    setEditedMessageContent(message.content);
+  };
+
+  const cancelEditing = () => {
+    setEditingMessageId(null);
+    setEditedMessageContent('');
   };
 
   const removeFile = (fileName) => {
     setFiles(files.filter((file) => file.name !== fileName));
+    setAdditionalFiles(additionalFiles.filter((file) => file.name !== fileName));
   };
 
   const generateFilePreview = (file) => {
-    const fileType = file.type.split('/')[0];
-    const fileExtension = file.name.split('.').pop().toLowerCase();
+    const fileType = file.type?.split('/')[0] || file.split('.').pop().toLowerCase();
+    const fileExtension = file.name?.split('.').pop().toLowerCase() || file.split('.').pop().toLowerCase();
 
-    if (fileType === 'image') {
-      return <img src={URL.createObjectURL(file)} alt={file.name} className="file-preview" />;
+    if (fileType === 'image' || ['png', 'jpg', 'jpeg'].includes(fileExtension)) {
+      return file instanceof File ? (
+        <img src={URL.createObjectURL(file)} alt={file.name} className="file-preview" />
+      ) : (
+        <img src={`/Uploads/${file}`} alt={file} className="file-preview" />
+      );
     } else if (fileExtension === 'pdf') {
       return (
         <div className="file-preview-icon">
@@ -232,12 +456,6 @@ const ClientDashboard = () => {
               onClick={() => setCurrentTab('completedJobs')}
             >
               Completed Jobs ({completedJobs.length})
-            </button>
-            <button
-              className={currentTab === 'chat' ? 'tab-active' : ''}
-              onClick={() => setCurrentTab('chat')}
-            >
-              Chat with Admin
             </button>
           </div>
 
@@ -389,13 +607,12 @@ const ClientDashboard = () => {
                     <label htmlFor="files">Upload Files</label>
                     <input
                       id="files"
-                      className="form-input file-input"
+                      className="file-input"
                       type="file"
                       multiple
                       onChange={(e) => setFiles(Array.from(e.target.files))}
                     />
                     <span className="form-hint">Upload relevant materials or instructions (optional)</span>
-
                     {files.length > 0 && (
                       <div className="uploaded-files">
                         <ul>
@@ -557,15 +774,37 @@ const ClientDashboard = () => {
             <div className="job-list">
               <h2>Active Jobs</h2>
               {activeJobs.length > 0 ? (
-                activeJobs.map((job) => (
-                  <div key={job.id} className="job-card" onClick={() => viewJobDetails(job.id)}>
-                    <h3>{job.title}</h3>
-                    <p>Subject: {job.subject}</p>
-                    <p>Pages: {job.pages}</p>
-                    <p>Deadline: {new Date(job.deadline).toLocaleString()}</p>
-                    <p>Status: {job.status}</p>
-                  </div>
-                ))
+                <table className="job-table">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Subject</th>
+                      <th>Pages</th>
+                      <th>Deadline</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeJobs.map((job) => (
+                      <tr key={job.id}>
+                        <td>{job.title}</td>
+                        <td>{job.subject}</td>
+                        <td>{job.pages}</td>
+                        <td>{new Date(job.deadline).toLocaleString()}</td>
+                        <td>{job.status}</td>
+                        <td>
+                          <button
+                            onClick={() => viewJobDetails(job.id)}
+                            className="details-button"
+                          >
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <p>No active jobs found.</p>
               )}
@@ -576,15 +815,37 @@ const ClientDashboard = () => {
             <div className="job-list">
               <h2>Completed Jobs</h2>
               {completedJobs.length > 0 ? (
-                completedJobs.map((job) => (
-                  <div key={job.id} className="job-card" onClick={() => viewJobDetails(job.id)}>
-                    <h3>{job.title}</h3>
-                    <p>Subject: {job.subject}</p>
-                    <p>Pages: {job.pages}</p>
-                    <p>Deadline: {new Date(job.deadline).toLocaleString()}</p>
-                    <p>Status: {job.status}</p>
-                  </div>
-                ))
+                <table className="job-table">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Subject</th>
+                      <th>Pages</th>
+                      <th>Deadline</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {completedJobs.map((job) => (
+                      <tr key={job.id}>
+                        <td>{job.title}</td>
+                        <td>{job.subject}</td>
+                        <td>{job.pages}</td>
+                        <td>{new Date(job.deadline).toLocaleString()}</td>
+                        <td>{job.status}</td>
+                        <td>
+                          <button
+                            onClick={() => viewJobDetails(job.id)}
+                            className="details-button"
+                          >
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <p>No completed jobs found.</p>
               )}
@@ -595,149 +856,174 @@ const ClientDashboard = () => {
             <div className="job-details">
               <h2>Job Details</h2>
               <div className="job-details-content">
-                <h3>{selectedJob.title}</h3>
-                <p>Subject: {selectedJob.subject}</p>
-                <p>Pages: {selectedJob.pages}</p>
-                <p>Deadline: {new Date(selectedJob.deadline).toLocaleString()}</p>
-                <p>Instructions: {selectedJob.instructions}</p>
-                <p>Formatting Style: {selectedJob.formatting_style}</p>
-                <p>Writer Level: {selectedJob.writer_level}</p>
-                <p>Spacing: {selectedJob.spacing}</p>
-                <p>Cited Resources: {selectedJob.cited_resources}</p>
-                <p>Status: {selectedJob.status}</p>
-
-                {selectedJob.files?.length > 0 && (
+                <div className="job-details-grid">
+                  <p><strong>Topic:</strong> {selectedJob.title}</p>
+                  <p><strong>Subject:</strong> {selectedJob.subject}</p>
+                  <p><strong>Number of Pages:</strong> {selectedJob.pages}</p>
+                  <p><strong>Spacing:</strong> {selectedJob.spacing}</p>
+                  <p><strong>Deadline:</strong> {new Date(selectedJob.deadline).toLocaleString()}</p>
+                  <p><strong>Number of Cited Resources:</strong> {selectedJob.cited_resources}</p>
+                  <p><strong>Formatting Style:</strong> {selectedJob.formatting_style}</p>
+                  <p><strong>Writer Level:</strong> {selectedJob.writer_level}</p>
+                  <p><strong>Status:</strong> {selectedJob.status}</p>
+                </div>
+                <div className="instructions">
+                  <p><strong>Instructions:</strong> {selectedJob.instructions}</p>
+                </div>
+                {(selectedJob.files?.length > 0 || selectedJob.all_files?.length > 0) && (
                   <div>
                     <h4>Uploaded Files:</h4>
-                    <ul>
-                      {selectedJob.files.map((file, index) => (
-                        <li key={index}>
-                          <a
-                            href={`http://localhost:5000/uploads/${file}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                          >
-                            Download File {index + 1}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="uploaded-files">
+                      <ul>
+                        {(selectedJob.all_files || selectedJob.files || []).map((file, index) => (
+                          !file.includes('completed-') && (
+                            <li key={index} className="uploaded-file-item">
+                              <div className="file-preview-container">{generateFilePreview(file)}</div>
+                              <span>{file.split('/').pop()}</span>
+                              <button
+                                onClick={() => downloadFile(file)}
+                                disabled={isDownloading}
+                                className="download-button"
+                              >
+                                {isDownloading ? 'Downloading...' : 'Download File'}
+                              </button>
+                            </li>
+                          )
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 )}
-
+                {selectedJob.status !== 'Completed' && (
+                  <div className="additional-files-section">
+                    <h4>Upload Additional Files</h4>
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(e) => setAdditionalFiles(Array.from(e.target.files))}
+                    />
+                    {additionalFiles.length > 0 && (
+                      <div className="uploaded-files">
+                        <ul>
+                          {additionalFiles.map((file, index) => (
+                            <li key={index} className="uploaded-file-item">
+                              <div className="file-preview-container">{generateFilePreview(file)}</div>
+                              <span>{file.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeFile(file.name)}
+                                className="remove-file-button"
+                              >
+                                X
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <button 
+                          onClick={sendAdditionalFiles}
+                          disabled={isUploading || additionalFiles.length === 0}
+                          className="upload-button"
+                        >
+                          {isUploading ? 'Uploading...' : 'Upload Files'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {selectedJob.completed_files?.length > 0 && (
                   <div>
-                    <h4>Completed Work:</h4>
-                    <ul>
-                      {selectedJob.completed_files.map((file, index) => (
-                        <li key={index}>
-                          <a
-                            href={`http://localhost:5000/uploads/${file}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                          >
-                            Download Completed File {index + 1}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
+                    <h4>Completed Files:</h4>
+                    <div className="uploaded-files">
+                      <ul>
+                        {selectedJob.completed_files.map((file, index) => (
+                          <li key={index} className="uploaded-file-item">
+                            <div className="file-preview-container">{generateFilePreview(file)}</div>
+                            <span>{file.split('/').pop()}</span>
+                            <button
+                              onClick={() => downloadFile(file)}
+                              disabled={isDownloading}
+                              className="download-button"
+                            >
+                              {isDownloading ? 'Downloading...' : 'Download Completed File'}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 )}
-
-                <div className="messages-section">
-                  <h3>Communication with Admin</h3>
-                  {selectedJob.messages?.length > 0 ? (
-                    selectedJob.messages.map((msg, index) => (
-                      <div
-                        key={index}
-                        className={`message ${msg.sender_role === 'client' ? 'message-sent' : 'message-received'}`}
-                      >
-                        <p><strong>{msg.sender_role === 'client' ? 'You' : 'Admin'}:</strong> {msg.content}</p>
-                        {msg.files?.length > 0 && (
-                          <div className="message-files">
-                            <p>Attachments:</p>
-                            <ul>
-                              {msg.files.map((file, i) => (
-                                <li key={i}>
-                                  <a
-                                    href={`http://localhost:5000/uploads/${file}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    download
-                                  >
-                                    Download File {i + 1}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        <small>{new Date(msg.created_at).toLocaleString()}</small>
-                      </div>
-                    ))
-                  ) : (
-                    <p>No messages yet. Start the conversation.</p>
-                  )}
-
-                  <div className="message-input">
-                    <h4>Send Message to Admin</h4>
-                    <textarea
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type your message to the admin..."
-                      rows="4"
-                    />
-                    <button
-                      onClick={sendMessage}
-                      disabled={!newMessage.trim()}
-                    >
-                      Send Message
-                    </button>
-                  </div>
-                </div>
               </div>
-              <button onClick={() => setCurrentTab('activeJobs')}>Back to Jobs</button>
+              <button onClick={() => setCurrentTab('activeJobs')} className="action-button">Back to Jobs</button>
             </div>
           )}
+        </div>
 
-          {currentTab === 'chat' && (
-            <div className="chat-section">
-              <h2>Chat with Admin</h2>
-              <div className="messages-section">
-                {chatMessages.length > 0 ? (
-                  chatMessages.map((msg, index) => (
-                    <div
-                      key={index}
-                      className={`message ${msg.sender_role === 'client' ? 'message-sent' : 'message-received'}`}
-                    >
+        <div className="admin-chat">
+          <h3>Chat with Admin</h3>
+          <button onClick={clearChatHistory} className="auth-button">
+            Clear Chat History
+          </button>
+          <div className="admin-messages">
+            {chatMessages.length > 0 ? (
+              chatMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`message ${msg.sender_role === 'client' ? 'message-sent' : 'message-received'}`}
+                >
+                  {editingMessageId === msg.id ? (
+                    <div className="edit-message">
+                      <textarea
+                        value={editedMessageContent}
+                        onChange={(e) => setEditedMessageContent(e.target.value)}
+                        rows="3"
+                      />
+                      <div className="edit-actions">
+                        <button onClick={() => saveEditedMessage(msg.id)}>
+                          <FaSave /> Save
+                        </button>
+                        <button onClick={cancelEditing}>
+                          <FaTimes /> Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
                       <p><strong>{msg.sender_role === 'client' ? 'You' : 'Admin'}:</strong> {msg.content}</p>
                       <small>{new Date(msg.created_at).toLocaleString()}</small>
-                    </div>
-                  ))
-                ) : (
-                  <p>No messages yet. Start the conversation.</p>
-                )}
-
-                <div className="message-input">
-                  <h4>Send Message to Admin</h4>
-                  <textarea
-                    value={newChatMessage}
-                    onChange={(e) => setNewChatMessage(e.target.value)}
-                    placeholder="Type your message to the admin..."
-                    rows="4"
-                  />
-                  <button
-                    onClick={sendChatMessage}
-                    disabled={!newChatMessage.trim()}
-                  >
-                    Send Message
-                  </button>
+                      {msg.sender_role === 'client' && (
+                        <div className="message-actions">
+                          <button onClick={() => startEditingMessage(msg)} title="Edit">
+                            <FaEdit />
+                          </button>
+                          <button onClick={() => deleteChatMessage(msg.id)} title="Delete">
+                            <FaTrash />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-              </div>
-            </div>
-          )}
+              ))
+            ) : (
+              <p>No messages yet. Start the conversation.</p>
+            )}
+          </div>
+          <div className="message-input">
+            <textarea
+              value={newChatMessage}
+              onChange={(e) => setNewChatMessage(e.target.value)}
+              onKeyPress={sendChatMessage}
+              placeholder="Type your message to the admin..."
+              rows="3"
+            />
+            <button
+              onClick={sendChatMessage}
+              disabled={!newChatMessage.trim()}
+              className="send-message-button"
+            >
+              Send
+            </button>
+          </div>
         </div>
       </div>
     </>

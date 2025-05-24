@@ -1,0 +1,233 @@
+:root {
+    --PrimaryColor: #097aa0;
+    --SecondaryColor: orangered;
+    --goldColor: gold;
+    --blackColor: #343a40;
+    --whiteColor: hsl(0, 0%, 100%);
+    --textColor: hsl(240, 4%, 36%);
+    --bodyColor: #f7f9fc;
+    --cardBG: rgb(225, 225, 235);
+  }
+  
+  .admin-dashboard-container {
+    width: 100%;
+    max-width: 1600px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  
+  .admin-dashboard {
+    background: var(--whiteColor);
+    border-radius: 15px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    min-height: calc(100vh - 200px);
+    position: relative;
+    z-index: 10;
+  }
+  
+  .auth-button {
+    background: linear-gradient(to right, var(--SecondaryColor), var(--PrimaryColor));
+    color: var(--whiteColor);
+    border: none;
+    border-radius: 20px;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  
+  .auth-button:hover {
+    background: linear-gradient(to right, var(--PrimaryColor), var(--SecondaryColor));
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+  
+  .dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid var(--goldColor);
+  }
+  
+  .dashboard-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--blackColor);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  
+  .user-info p {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--PrimaryColor);
+    margin: 0;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .dashboard-tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  
+  .dashboard-tabs button {
+    background: transparent;
+    border: none;
+    padding: 1rem 2rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--textColor);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .dashboard-tabs button:hover {
+    color: var(--PrimaryColor);
+  }
+  
+  .dashboard-tabs button.tab-active {
+    color: var(--PrimaryColor);
+    background: rgba(9, 122, 160, 0.1);
+    border-radius: 10px 10px 0 0;
+  }
+  
+  .dashboard-tabs button.tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: var(--PrimaryColor);
+  }
+  
+  .dashboard-tabs button:disabled {
+    color: #cccccc;
+    cursor: not-allowed;
+  }
+  
+  .job-list {
+    background: var(--whiteColor);
+    border-radius: 15px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .job-list h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--PrimaryColor);
+    margin: 0 0 2rem;
+    text-align: center;
+  }
+  
+  .job-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--whiteColor);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  
+  .job-table th,
+  .job-table td {
+    padding: 1.2rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  }
+  
+  .job-table th {
+    background: rgba(9, 122, 160, 0.1);
+    font-weight: 600;
+    color: var(--blackColor);
+    text-transform: uppercase;
+    font-size: 0.95rem;
+  }
+  
+  .job-table td {
+    color: var(--textColor);
+    font-size: 0.95rem;
+  }
+  
+  .job-table tr:hover {
+    background: rgba(9, 122, 160, 0.05);
+  }
+  
+  .details-button {
+    background: var(--PrimaryColor);
+    color: var(--whiteColor);
+    border: none;
+    border-radius: 25px;
+    padding: 0.5rem 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  
+  .details-button:hover {
+    background: var(--SecondaryColor);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+  
+  @media (max-width: 992px) {
+    .admin-dashboard {
+      padding: 1.5rem;
+    }
+  
+    .job-table th,
+    .job-table td {
+      padding: 0.75rem;
+      font-size: 0.9rem;
+    }
+  }
+  
+  @media (max-width: 576px) {
+    .dashboard-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+  
+    .dashboard-header h1 {
+      font-size: 1.5rem;
+    }
+  
+    .dashboard-tabs {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  
+    .dashboard-tabs button {
+      width: 100%;
+      text-align: left;
+      padding: 1rem;
+    }
+  
+    .job-table {
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+  
+    .job-table th,
+    .job-table td {
+      min-width: 120px;
+    }
+  }

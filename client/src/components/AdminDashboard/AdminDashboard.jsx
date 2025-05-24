@@ -1,322 +1,251 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../Header/Header.jsx';
-import api from '../../utils/api.js';
+import AdminJobDetails from '../AdminJobDetails/AdminJobDetails.jsx';
 import { AuthContext } from '../context/AuthContext.jsx';
+import { 
+  getCurrentUser, 
+  getJobs, 
+  getJob,
+  getSocketJobs, 
+  getSocketMessages,
+  getFile 
+} from '../../utils/api.js';
+import toast from 'react-hot-toast';
 import './AdminDashboard.css';
+import { FaTrash, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const { user, role } = useContext(AuthContext);
-
+  const { user, role, token } = useContext(AuthContext);
   const [jobs, setJobs] = useState([]);
-  const [currentTab, setCurrentTab] = useState('allJobs');
   const [selectedJob, setSelectedJob] = useState(null);
-  const [newMessage, setNewMessage] = useState('');
-  const [completedFiles, setCompletedFiles] = useState([]);
-  const [chatMessages, setChatMessages] = useState([]);
-  const [newChatMessage, setNewChatMessage] = useState('');
+  const [currentTab, setCurrentTab] = useState('allJobs');
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     if (!user || role !== 'admin') {
       navigate('/auth');
     } else {
-      fetchJobs();
-      fetchChatMessages();
+      fetchData();
     }
-  }, [user, role, navigate]);
 
-  const fetchJobs = async () => {
-    try {
-      const response = await api.get('/api/jobs');
-      setJobs(response.data);
-    } catch (error) {
-      console.error('Failed to fetch jobs:', error);
+    const socketJobs = getSocketJobs();
+    const socketMessages = getSocketMessages();
+
+    if (socketJobs) {
+      socketJobs.on('new_job', (job) => {
+        setJobs((prev) => [...prev, job]);
+        toast.success('New job posted');
+      });
+      socketJobs.on('job_updated', (job) => {
+        setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+        if (selectedJob && selectedJob.id === job.id) {
+          setSelectedJob({
+            ...job,
+            messages: job.messages || selectedJob.messages,
+            all_files: job.all_files || selectedJob.all_files
+          });
+        }
+        toast.success('Job updated');
+      });
     }
-  };
 
-  const fetchChatMessages = async () => {
-    try {
-      const response = await api.get('/api/messages');
-      setChatMessages(response.data);
-    } catch (error) {
-      console.error('Failed to fetch chat messages:', error);
+    if (socketMessages) {
+      socketMessages.on('new_general_message', (message) => {
+        if (selectedJob && message.client_id === selectedJob.user_id && message.sender_role !== 'admin') {
+          setSelectedJob((prev) => ({
+            ...prev,
+            messages: [...(prev.messages || []), message],
+            all_files: [...(prev.all_files || []), ...(message.files || [])],
+          }));
+          toast.success('New message received from client');
+        }
+      });
+      socketMessages.on('message_updated', (message) => {
+        if (selectedJob && selectedJob.messages?.some((m) => m.id === message.id)) {
+          setSelectedJob((prev) => ({
+            ...prev,
+            messages: prev.messages.map((m) => (m.id === message.id ? message : m)),
+          }));
+          toast.success('Message updated');
+        }
+      });
+      socketMessages.on('message_deleted', ({ message_id, client_id }) => {
+        if (selectedJob && selectedJob.user_id === client_id) {
+          setSelectedJob((prev) => ({
+            ...prev,
+            messages: prev.messages.filter((m) => m.id !== message_id),
+          }));
+          toast.success('Message deleted');
+        }
+      });
     }
-  };
 
-  const updateJobStatus = async (jobId, status) => {
-    try {
-      await api.put(`/api/jobs/${jobId}`, { status });
-      fetchJobs();
-      if (selectedJob && selectedJob.id === jobId) {
-        const response = await api.get(`/api/jobs/${jobId}`);
-        setSelectedJob(response.data);
+    return () => {
+      if (socketJobs) {
+        socketJobs.off('new_job');
+        socketJobs.off('job_updated');
       }
+      if (socketMessages) {
+        socketMessages.off('new_general_message');
+        socketMessages.off('message_updated');
+        socketMessages.off('message_deleted');
+      }
+    };
+  }, [user, role, navigate, selectedJob]);
+
+  const fetchData = async () => {
+    try {
+      const [userData, jobsData] = await Promise.all([
+        getCurrentUser(),
+        getJobs(),
+      ]);
+      setJobs(jobsData);
     } catch (error) {
-      console.error('Failed to update job status:', error);
-      alert('Failed to update job status. Please try again.');
+      toast.error(error.message || 'Failed to load data');
+      if (error.message.includes('Token')) {
+        navigate('/auth');
+      }
     }
   };
 
   const viewJobDetails = async (jobId) => {
     try {
-      const response = await api.get(`/api/jobs/${jobId}`);
-      setSelectedJob(response.data);
+      const job = await getJob(jobId);
+      setSelectedJob(job);
       setCurrentTab('jobDetails');
-      setNewMessage('');
-      setCompletedFiles([]);
     } catch (error) {
-      console.error('Failed to fetch job details:', error);
+      toast.error(error.message || 'Job not found');
     }
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() && completedFiles.length === 0) return;
-
+  const downloadFile = async (filename) => {
+    setIsDownloading(true);
     try {
-      const formData = new FormData();
-      formData.append('content', newMessage);
-      completedFiles.forEach((file) => formData.append('completed_files', file));
-
-      await api.post(`/api/jobs/${selectedJob.id}/messages`, formData);
-      const response = await api.get(`/api/jobs/${selectedJob.id}`);
-      setSelectedJob(response.data);
-      setNewMessage('');
-      setCompletedFiles([]);
-      fetchJobs();
+      await getFile(filename);
+      toast.success('File downloaded successfully!');
     } catch (error) {
-      console.error('Failed to send message:', error);
-      alert('Failed to send message. Please try again.');
+      toast.error(error.message || 'Failed to download file');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
-  const sendChatMessage = async () => {
-    if (!newChatMessage.trim()) return;
-    try {
-      const formData = new FormData();
-      formData.append('content', newChatMessage);
-      await api.post('/api/messages', formData);
-      setNewChatMessage('');
-      fetchChatMessages();
-    } catch (error) {
-      console.error('Failed to send chat message:', error);
-      alert('Failed to send chat message. Please try again.');
+  const generateFilePreview = (file) => {
+    const fileExtension = (file.name || file).split('.').pop().toLowerCase();
+
+    if (['png', 'jpg', 'jpeg'].includes(fileExtension)) {
+      return file instanceof File ? (
+        <img src={URL.createObjectURL(file)} alt={file.name} className="file-preview" />
+      ) : (
+        <img src={`/Uploads/${file}`} alt={file} className="file-preview" />
+      );
+    } else if (fileExtension === 'pdf') {
+      return (
+        <div className="file-preview-icon">
+          <span className="file-icon">📄</span>
+          <span className="file-type">PDF</span>
+        </div>
+      );
+    } else if (fileExtension === 'docx' || fileExtension === 'doc') {
+      return (
+        <div className="file-preview-icon">
+          <span className="file-icon">📝</span>
+          <span className="file-type">DOCX</span>
+        </div>
+      );
     }
+    return (
+      <div className="file-preview-icon">
+        <span className="file-icon">📁</span>
+        <span className="file-type">File</span>
+      </div>
+    );
   };
 
   return (
     <>
       <Header />
-      <div className="admin-dashboard">
-        <div className="dashboard-header">
-          <h1>Admin Dashboard</h1>
-          <div className="user-info">
-            <p>Welcome, {user?.name}</p>
-          </div>
-        </div>
-
-        <div className="dashboard-tabs">
-          <button
-            className={currentTab === 'allJobs' ? 'tab-active' : ''}
-            onClick={() => setCurrentTab('allJobs')}
-          >
-            All Jobs ({jobs.length})
-          </button>
-          <button
-            className={currentTab === 'chat' ? 'tab-active' : ''}
-            onClick={() => setCurrentTab('chat')}
-          >
-            Chat with Clients
-          </button>
-        </div>
-
-        {currentTab === 'allJobs' && (
-          <div className="job-list">
-            <h2>All Jobs</h2>
-            {jobs.length > 0 ? (
-              jobs.map((job) => (
-                <div key={job.id} className="job-card">
-                  <h3 onClick={() => viewJobDetails(job.id)} style={{ cursor: 'pointer' }}>
-                    {job.client_name}: {job.title}
-                  </h3>
-                  <p>Client: {job.client_name} ({job.client_email})</p>
-                  <p>Subject: {job.subject}</p>
-                  <p>Pages: {job.pages}</p>
-                  <p>Deadline: {new Date(job.deadline).toLocaleString()}</p>
-                  <p>Status: {job.status}</p>
-                  <div className="status-controls">
-                    <label>Update Status:</label>
-                    <select
-                      value={job.status}
-                      onChange={(e) => updateJobStatus(job.id, e.target.value)}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p>No jobs available.</p>
-            )}
-          </div>
-        )}
-
-        {currentTab === 'jobDetails' && selectedJob && (
-          <div className="job-details">
-            <h2>Job Details</h2>
-            <div className="job-details-content">
-              <h3>{selectedJob.client_name}: {selectedJob.title}</h3>
-              <p>Subject: {selectedJob.subject}</p>
-              <p>Pages: {selectedJob.pages}</p>
-              <p>Deadline: {new Date(selectedJob.deadline).toLocaleString()}</p>
-              <p>Instructions: {selectedJob.instructions}</p>
-              <p>Formatting Style: {selectedJob.formatting_style}</p>
-              <p>Writer Level: {selectedJob.writer_level}</p>
-              <p>Spacing: {selectedJob.spacing}</p>
-              <p>Cited Resources: {selectedJob.cited_resources}</p>
-
-              {selectedJob.files?.length > 0 && (
-                <div className="files-section">
-                  <h4>Original Files from Client:</h4>
-                  <ul>
-                    {selectedJob.files.map((file, index) => (
-                      <li key={index}>
-                        <a
-                          href={`http://localhost:5000/uploads/${file}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                        >
-                          Download File {index + 1}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {selectedJob.completed_files?.length > 0 && (
-                <div className="files-section">
-                  <h4>Completed Files:</h4>
-                  <ul>
-                    {selectedJob.completed_files.map((file, index) => (
-                      <li key={index}>
-                        <a
-                          href={`http://localhost:5000/uploads/${file}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                        >
-                          Download Completed File {index + 1}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="messages-section">
-                <h3>Communication with Client</h3>
-                {selectedJob.messages?.length > 0 ? (
-                  selectedJob.messages.map((msg, index) => (
-                    <div
-                      key={index}
-                      className={`message ${msg.sender_role === 'admin' ? 'message-sent' : 'message-received'}`}
-                    >
-                      <p><strong>{msg.sender_role === 'admin' ? 'You' : selectedJob.client_name}:</strong> {msg.content}</p>
-                      {msg.files?.length > 0 && (
-                        <div className="message-files">
-                          <p>Attachments:</p>
-                          <ul>
-                            {msg.files.map((file, i) => (
-                              <li key={i}>
-                                <a
-                                  href={`http://localhost:5000/uploads/${file}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  download
-                                >
-                                  Download File {i + 1}
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      <small>{new Date(msg.created_at).toLocaleString()}</small>
-                    </div>
-                  ))
-                ) : (
-                  <p>No messages yet. Start the conversation.</p>
-                )}
-
-                <div className="message-input">
-                  <h4>Send Response to Client</h4>
-                  <textarea
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your message to the client..."
-                    rows="4"
-                  />
-                  <div className="file-upload">
-                    <label>Upload Completed Work:</label>
-                    <input
-                      type="file"
-                      multiple
-                      onChange={(e) => setCompletedFiles(Array.from(e.target.files))}
-                    />
-                  </div>
-                  <button
-                    onClick={sendMessage}
-                    disabled={!newMessage.trim() && completedFiles.length === 0}
-                  >
-                    Send Message & Files
-                  </button>
-                </div>
-              </div>
+      <div className="admin-dashboard-container">
+        <div className="admin-dashboard">
+          <div className="dashboard-header">
+            <h1>Admin Dashboard</h1>
+            <div className="user-info">
+              <p>Welcome, {user?.name}</p>
             </div>
-            <button onClick={() => setCurrentTab('allJobs')}>Back to All Jobs</button>
           </div>
-        )}
 
-        {currentTab === 'chat' && (
-          <div className="chat-section">
-            <h2>Chat with Clients</h2>
-            <div className="messages-section">
-              {chatMessages.length > 0 ? (
-                chatMessages.map((msg, index) => (
-                  <div
-                    key={index}
-                    className={`message ${msg.sender_role === 'admin' ? 'message-sent' : 'message-received'}`}
-                  >
-                    <p><strong>{msg.sender_role === 'admin' ? 'You' : 'Client'}:</strong> {msg.content}</p>
-                    <small>{new Date(msg.created_at).toLocaleString()}</small>
-                  </div>
-                ))
+          <div className="dashboard-tabs">
+            <button
+              className={currentTab === 'allJobs' ? 'tab-active' : ''}
+              onClick={() => setCurrentTab('allJobs')}
+            >
+              All Jobs
+            </button>
+            <button
+              className={currentTab === 'jobDetails' ? 'tab-active' : ''}
+              onClick={() => setCurrentTab('jobDetails')}
+              disabled={!selectedJob}
+            >
+              Job Details
+            </button>
+          </div>
+
+          {currentTab === 'allJobs' && (
+            <div className="job-list">
+              <h2>All Jobs</h2>
+              {jobs.length > 0 ? (
+                <table className="job-table">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Subject</th>
+                      <th>Client</th>
+                      <th>Pages</th>
+                      <th>Deadline</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {jobs.map((job) => (
+                      <tr key={job.id}>
+                        <td>{job.title}</td>
+                        <td>{job.subject}</td>
+                        <td>{job.client_name}</td>
+                        <td>{job.pages}</td>
+                        <td>{new Date(job.deadline).toLocaleString()}</td>
+                        <td>{job.status}</td>
+                        <td>
+                          <button
+                            onClick={() => viewJobDetails(job.id)}
+                            className="details-button"
+                          >
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
-                <p>No messages yet.</p>
+                <p>No jobs found.</p>
               )}
-
-              <div className="message-input">
-                <h4>Send Message to Client</h4>
-                <textarea
-                  value={newChatMessage}
-                  onChange={(e) => setNewChatMessage(e.target.value)}
-                  placeholder="Type your message to the client..."
-                  rows="4"
-                />
-                <button
-                  onClick={sendChatMessage}
-                  disabled={!newChatMessage.trim()}
-                >
-                  Send Message
-                </button>
-              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {currentTab === 'jobDetails' && selectedJob && (
+            <AdminJobDetails
+              job={selectedJob}
+              onBack={() => setCurrentTab('allJobs')}
+              onUpdate={fetchData}
+              downloadFile={downloadFile}
+              generateFilePreview={generateFilePreview}
+              isDownloading={isDownloading}
+            />
+          )}
+        </div>
       </div>
     </>
   );

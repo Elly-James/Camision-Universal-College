@@ -1,0 +1,560 @@
+:root {
+    --PrimaryColor: #097aa0;
+    --SecondaryColor: orangered;
+    --goldColor: gold;
+    --blackColor: #343a40;
+    --whiteColor: hsl(0, 0%, 100%);
+    --textColor: hsl(240, 4%, 36%);
+    --bodyColor: #f7f9fc;
+    --cardBG: rgb(225, 225, 235);
+}
+
+.job-details {
+    background: var(--whiteColor);
+    border-radius: 15px;
+    padding: 2rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.job-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    position: sticky;
+    top: 0;
+    background: var(--whiteColor);
+    z-index: 10;
+    padding: 1rem 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.job-details-header h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--PrimaryColor);
+    margin: 0;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.action-button {
+    background: var(--PrimaryColor);
+    color: var(--whiteColor);
+    border: none;
+    border-radius: 20px;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.action-button:hover {
+    background: var(--SecondaryColor);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.action-button.clear-chat {
+    background: #dc3545;
+}
+
+.action-button.clear-chat:hover {
+    background: #c82333;
+}
+
+.job-details-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.job-details-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.job-details-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.job-details-card h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--blackColor);
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--goldColor);
+    padding-bottom: 0.5rem;
+}
+
+.job-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.job-details-grid p {
+    font-size: 0.95rem;
+    color: var(--textColor);
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    background: rgba(9, 122, 160, 0.05);
+    border-radius: 5px;
+}
+
+.instructions {
+    font-size: 0.95rem;
+    color: var(--textColor);
+    white-space: pre-wrap;
+    padding: 1rem;
+    background: rgba(9, 122, 160, 0.05);
+    border-radius: 5px;
+}
+
+.status-update {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.status-update select {
+    padding: 0.75rem;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    color: var(--textColor);
+    background: var(--whiteColor);
+    transition: all 0.3s ease;
+    width: 200px;
+}
+
+.status-update select:focus {
+    border-color: var(--PrimaryColor);
+    box-shadow: 0 0 8px rgba(9, 122, 160, 0.3);
+    outline: none;
+}
+
+.uploaded-files ul {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+}
+
+.uploaded-file-item {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    background: var(--whiteColor);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.75rem;
+}
+
+.uploaded-file-item:hover {
+    transform: translateY(-3px);
+}
+
+.file-preview-container {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    overflow: hidden;
+    width: 100%;
+}
+
+.file-preview {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.file-preview-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: #f8fafc;
+}
+
+.file-preview-icon .file-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.3rem;
+}
+
+.file-preview-icon .file-type {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--textColor);
+}
+
+.uploaded-file-item span {
+    display: block;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    text-align: center;
+    width: 100%;
+}
+
+.download-button {
+    background: var(--PrimaryColor);
+    color: var(--whiteColor);
+    border: none;
+    border-radius: 15px;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+.download-button:hover {
+    background: var(--SecondaryColor);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.download-button:disabled {
+    background: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.remove-file-button {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    background: var(--SecondaryColor);
+    color: var(--whiteColor);
+    border: none;
+    font-size: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.remove-file-button:hover {
+    background: darken(var(--SecondaryColor), 10%);
+}
+
+.messages-section {
+    margin-top: 1rem;
+}
+
+.admin-messages {
+    max-height: 500px;
+    overflow-y: auto;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: rgba(9, 122, 160, 0.05);
+    border-radius: 10px;
+}
+
+.admin-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.admin-messages::-webkit-scrollbar-thumb {
+    background: var(--PrimaryColor);
+    border-radius: 3px;
+}
+
+.message {
+    margin-bottom: 1rem;
+    max-width: 70%;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.message:hover {
+    transform: translateY(-2px);
+}
+
+.message-sent {
+    margin-left: auto;
+    background: var(--PrimaryColor);
+    color: var(--whiteColor);
+    border-radius: 10px 10px 0 10px;
+}
+
+.message-received {
+    margin-right: auto;
+    background: var(--cardBG);
+    color: var(--textColor);
+    border-radius: 10px 10px 10px 0;
+}
+
+.message p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.message small {
+    display: block;
+    font-size: 0.7rem;
+    opacity: 0.7;
+    margin-top: 0.5rem;
+}
+
+.message-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.message-actions button {
+    background: transparent;
+    border: none;
+    color: var(--whiteColor);
+    font-size: 0.8rem;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+}
+
+.message-actions button:hover {
+    opacity: 1;
+}
+
+.edit-message textarea {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--whiteColor);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--whiteColor);
+    resize: none;
+}
+
+.edit-message textarea:focus {
+    border-color: var(--whiteColor);
+    outline: none;
+}
+
+.edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.edit-actions button {
+    background: var(--whiteColor);
+    color: var(--PrimaryColor);
+    border: none;
+    border-radius: 15px;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.edit-actions button:hover {
+    background: var(--SecondaryColor);
+    color: var(--whiteColor);
+}
+
+.message-input {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.message-input h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--blackColor);
+    margin-bottom: 0.5rem;
+}
+
+.message-input textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: var(--whiteColor);
+    color: var(--textColor);
+    resize: none;
+    transition: all 0.3s ease;
+}
+
+.message-input textarea:focus {
+    border-color: var(--PrimaryColor);
+    box-shadow: 0 0 8px rgba(9, 122, 160, 0.3);
+    outline: none;
+}
+
+.message-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.send-message-button {
+    background: var(--PrimaryColor);
+    color: var(--whiteColor);
+    border: none;
+    border-radius: 20px;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+.send-message-button:hover {
+    background: var(--SecondaryColor);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.send-message-button:disabled {
+    background: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.file-upload-section {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.file-upload-section h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--blackColor);
+    margin-bottom: 0.5rem;
+}
+
+.file-upload {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.file-upload input[type="file"] {
+    padding: 0.75rem;
+    border: 2px dashed var(--PrimaryColor);
+    border-radius: 8px;
+    background: rgba(9, 122, 160, 0.05);
+    cursor: pointer;
+    width: 100%;
+}
+
+.upload-files-button {
+    background: var(--PrimaryColor);
+    color: var(--whiteColor);
+    border: none;
+    border-radius: 20px;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+    align-self: flex-end;
+}
+
+.upload-files-button:hover {
+    background: var(--SecondaryColor);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.upload-files-button:disabled {
+    background: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+@media (max-width: 1200px) {
+    .job-details-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+}
+
+@media (max-width: 992px) {
+    .job-details-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .job-details-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .header-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 576px) {
+    .job-details {
+        padding: 1.5rem;
+    }
+
+    .job-details h2 {
+        font-size: 1.25rem;
+    }
+
+    .message {
+        max-width: 100%;
+    }
+
+    .action-button {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+    }
+
+    .send-message-button,
+    .upload-files-button {
+        width: 100%;
+    }
+}
