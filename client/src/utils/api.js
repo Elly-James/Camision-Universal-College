@@ -24,10 +24,26 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+
+    // Handle 429 (Too Many Requests) with exponential backoff
+    if (error.response && error.response.status === 429 && !originalRequest._retryCount) {
+      originalRequest._retryCount = originalRequest._retryCount || 0;
+      if (originalRequest._retryCount < 3) {
+        originalRequest._retryCount += 1;
+        const backoffTime = Math.pow(2, originalRequest._retryCount) * 1000; // 2s, 4s, 8s
+        console.warn(`Rate limit hit for ${originalRequest.url}, retrying after ${backoffTime}ms`);
+        await delay(backoffTime);
+        return api(originalRequest);
+      }
+    }
+
+    // Handle 401 (Unauthorized) with token refresh
     if (
       error.response &&
       error.response.status === 401 &&
@@ -60,13 +76,17 @@ api.interceptors.response.use(
         return Promise.reject(refreshError);
       }
     }
+
     if (error.response) {
       console.error('API Error:', {
         status: error.response.status,
         data: error.response.data,
         url: originalRequest.url,
       });
-      return Promise.reject({ error: error.response.data.error || 'Request failed', details: error.response.data.details });
+      return Promise.reject({
+        error: error.response.data.error || 'Request failed',
+        details: error.response.data.details || error.response.data,
+      });
     }
     console.error('Network Error:', error.message);
     return Promise.reject({ error: 'Network error', details: error.message });
@@ -93,6 +113,9 @@ const reconnectSockets = () => {
       query: { token },
       transports: ['websocket', 'polling'],
       withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
     socketMessages = io(`${API_URL}/messages`, {
@@ -100,6 +123,17 @@ const reconnectSockets = () => {
       query: { token },
       transports: ['websocket', 'polling'],
       withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
+
+    socketJobs.on('connect', () => {
+      console.log('Socket.IO /jobs connected');
+    });
+
+    socketMessages.on('connect', () => {
+      console.log('Socket.IO /messages connected');
     });
 
     socketJobs.on('connect_error', (error) => {
@@ -108,6 +142,14 @@ const reconnectSockets = () => {
 
     socketMessages.on('connect_error', (error) => {
       console.error('Socket.IO /messages connection error:', error);
+    });
+
+    socketJobs.on('disconnect', (reason) => {
+      console.warn('Socket.IO /jobs disconnected:', reason);
+    });
+
+    socketMessages.on('disconnect', (reason) => {
+      console.warn('Socket.IO /messages disconnected:', reason);
     });
   }
 };
@@ -217,7 +259,6 @@ export const updateJob = async (jobId, updates) => {
 export const sendMessage = async (formData, jobId = null) => {
   const url = jobId ? `/api/jobs/${jobId}/messages` : '/api/messages';
   if (!jobId) {
-    // Add recipient_id for general messages (admin ID)
     formData.append('recipient_id', '1'); // Assuming admin ID is 1; adjust as needed
   }
   const response = await api.post(url, formData, {
@@ -246,7 +287,6 @@ export const getMessages = async (jobId = null) => {
 
 export const getFile = async (filename) => {
   try {
-    // Normalize filename to ensure correct path
     const normalizedFilename = filename.replace(/\\/g, '/');
     const response = await api.get(`/Uploads/${normalizedFilename}`, {
       responseType: 'blob',
@@ -256,21 +296,20 @@ export const getFile = async (filename) => {
       },
     });
 
-    // Extract filename from Content-Disposition header or use the last part of the path
     let downloadFilename = normalizedFilename.split('/').pop();
     const contentDisposition = response.headers['content-disposition'];
     if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+      const filenameMatch = contentDisposition.match(/filename="?(.+)"?\s*$/);
       if (filenameMatch && filenameMatch[1]) {
         downloadFilename = filenameMatch[1];
       }
     }
 
-    const blob = new Blob([response.data], { type: response.headers['content-type'] });
+    const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/octet-stream' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = decodeURIComponent(downloadFilename); // Handle encoded filenames
+    a.download = decodeURIComponent(downloadFilename);
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
