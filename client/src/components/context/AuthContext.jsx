@@ -61,16 +61,13 @@ export const AuthProvider = ({ children }) => {
       const response = await api.post('/auth/google', { credential });
       const { access_token, refresh_token, role: userRole, user } = response.data;
 
-      // Store tokens and user info in localStorage
       localStorage.setItem('token', access_token);
       localStorage.setItem('refresh_token', refresh_token);
       localStorage.setItem('role', userRole);
       localStorage.setItem('email', user.email);
 
-      // Update context state
       setUser(user);
       setRole(userRole);
-
       return userRole;
     } catch (error) {
       console.error('Google login error:', error);
@@ -96,9 +93,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (email, username, password) => {
+  const register = async ({ email, password }) => {
     try {
-      const response = await api.post('/auth/register', { email, username, password });
+      const response = await api.post('/auth/register', { email, password });
       const { access_token, refresh_token, role: userRole, user } = response.data;
 
       localStorage.setItem('token', access_token);
@@ -140,3 +137,5 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+export default AuthProvider;

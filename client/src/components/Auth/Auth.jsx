@@ -10,8 +10,9 @@ const Auth = () => {
   const { user, login, googleLogin, appleLogin, register } = useContext(AuthContext);
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +25,12 @@ const Auth = () => {
         const userRole = await login(email, password);
         navigate(`/${userRole}-dashboard`);
       } else {
-        const userRole = await register(email, username, password);
+        if (password !== confirmPassword) {
+          setError('Passwords do not match');
+          setLoading(false);
+          return;
+        }
+        const userRole = await register({ email, password });
         navigate(`/${userRole}-dashboard`);
       }
     } catch (err) {
@@ -39,11 +45,9 @@ const Auth = () => {
     try {
       setLoading(true);
       setError('');
-
       if (!response.credential) {
         throw new Error('No credential received from Google');
       }
-
       const userRole = await googleLogin(response.credential);
       navigate(`/${userRole}-dashboard`);
     } catch (err) {
@@ -64,7 +68,6 @@ const Auth = () => {
     try {
       setLoading(true);
       setError('');
-
       if (response.authorization && response.authorization.id_token) {
         const userRole = await appleLogin(response.authorization.id_token);
         navigate(`/${userRole}-dashboard`);
@@ -99,33 +102,49 @@ const Auth = () => {
             />
           </div>
 
-          {!isLogin && (
-            <div className="form-group">
-              <label htmlFor="username">Username</label>
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <div className="password-input-container">
               <input
-                id="username"
-                type="text"
+                id="password"
+                type={showPassword ? 'text' : 'password'}
                 className="form-input"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
               />
+              <span
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? '👁️' : '👁️‍🗨️'}
+              </span>
+            </div>
+          </div>
+
+          {!isLogin && (
+            <div className="form-group">
+              <label htmlFor="confirmPassword">Confirm Password</label>
+              <div className="password-input-container">
+                <input
+                  id="confirmPassword"
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+                <span
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? '👁️' : '👁️‍🗨️'}
+                </span>
+              </div>
             </div>
           )}
-
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              className="form-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading}
-            />
-          </div>
 
           {isLogin && (
             <div className="form-group">
@@ -187,6 +206,10 @@ const Auth = () => {
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');
+              setEmail('');
+              setPassword('');
+              setConfirmPassword('');
+              setShowPassword(false);
             }}
             className="toggle-button"
             disabled={loading}

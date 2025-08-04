@@ -48,8 +48,8 @@ def register():
 
     data = request.get_json()
     logger.info(f"Register attempt with data: {data}")
-    if not data.get('email') or not data.get('password') or not data.get('username'):
-        return jsonify({"error": "Email, username, and password are required"}), 400
+    if not data.get('email') or not data.get('password'):
+        return jsonify({"error": "Email and password are required"}), 400
 
     if '@' not in data['email'] or '.' not in data['email']:
         return jsonify({"error": "Invalid email format"}), 400
@@ -58,13 +58,9 @@ def register():
         if User.query.filter_by(email=data['email']).first():
             return jsonify({"error": "Email already registered"}), 400
 
-        if User.query.filter_by(username=data['username']).first():
-            return jsonify({"error": "Username already taken"}), 400
-
         user = User(
             email=data['email'],
-            username=data['username'],
-            name=data.get('username', 'User'),
+            name=data.get('email', 'User').split('@')[0],  # Use email prefix as name
             role='client'
         )
         user.set_password(data['password'])
@@ -98,13 +94,14 @@ def login():
 
     try:
         user = User.query.filter_by(email=data['email']).first()
-        if not user:
-            user = User.query.filter_by(username=data['email']).first()
-
         if not user or not user.check_password(data['password']):
             return jsonify({"error": "Invalid credentials"}), 401
 
-        if user.email == 'ellyjames1999@gmail.com':
+        admin_email = os.getenv('ADMIN_EMAIL')
+        if not admin_email:
+            return jsonify({"error": "Server configuration error: ADMIN_EMAIL not set"}), 500
+
+        if user.email == admin_email:
             user.role = 'admin'
         else:
             user.role = 'client'
@@ -181,7 +178,6 @@ def google_login():
         if not user:
             user = User(
                 email=email,
-                username=email.split('@')[0],
                 name=name,
                 role='client',
                 password_hash=None
@@ -189,7 +185,11 @@ def google_login():
             db.session.add(user)
             db.session.commit()
 
-        if user.email == 'ellyjames1999@gmail.com':
+        admin_email = os.getenv('ADMIN_EMAIL')
+        if not admin_email:
+            return jsonify({"error": "Server configuration error: ADMIN_EMAIL not set"}), 500
+
+        if user.email == admin_email:
             user.role = 'admin'
         else:
             user.role = 'client'
@@ -250,7 +250,6 @@ def apple_login():
         if not user:
             user = User(
                 email=email,
-                username=email.split('@')[0],
                 name=name,
                 role='client',
                 password_hash=None
@@ -258,7 +257,11 @@ def apple_login():
             db.session.add(user)
             db.session.commit()
 
-        if user.email == 'ellyjames1999@gmail.com':
+        admin_email = os.getenv('ADMIN_EMAIL')
+        if not admin_email:
+            return jsonify({"error": "Server configuration error: ADMIN_EMAIL not set"}), 500
+
+        if user.email == admin_email:
             user.role = 'admin'
         else:
             user.role = 'client'
@@ -344,25 +347,30 @@ def forgot_password():
 
         reset_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/reset-password?token={token}"
         msg = Message(
-            subject="Password Reset Request",
+            subject="Password Reset Request for Camison Universal College",
             recipients=[user.email],
             body=f"""
-You requested a password reset for your Camison Universal College account.
-            
-Click the link below to reset your password:
+Dear {user.name or user.email.split('@')[0]},
+
+You have requested to reset your password for your Camison Universal College account.
+
+Please click the following link to reset your password:
 {reset_url}
-            
-This link will expire in 1 hour.
+
+This link will expire in 1 hour. If you did not request this, please ignore this email or contact support.
+
+Best regards,
+Camison Universal College Team
             """
         )
         try:
             mail.send(msg)
             logger.info(f"Password reset email sent to: {user.email}")
         except Exception as e:
-            logger.error(f"Failed to send reset email: {str(e)}")
+            logger.error(f"Failed to send reset email to {user.email}: {str(e)}")
             return jsonify({"error": "Failed to send reset email", "details": str(e)}), 500
 
-        return jsonify({"message": "Password reset link sent to your email"}), 200
+        return jsonify({"message": "Password reset link sent to your email. Please check your inbox (and spam folder if needed)."}), 200
     except Exception as e:
         logger.error(f"Forgot password failed: {str(e)}")
         return jsonify({"error": "Failed to process forgot password", "details": str(e)}), 500

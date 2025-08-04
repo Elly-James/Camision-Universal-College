@@ -14,6 +14,7 @@ const api = axios.create({
   withCredentials: true, // Enable credentials for CORS
 });
 
+// Request Interceptor: Add Authorization header with token if available
 api.interceptors.request.use(
   (config) => {
     if (token) {
@@ -24,8 +25,10 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Utility function for exponential backoff delay
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Response Interceptor: Handle errors, rate limiting, and token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -53,7 +56,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       try {
         const refreshResponse = await axios.post(
-          `${API_URL}/api/auth/refresh`,
+          `${API_URL}/auth/refresh`, // Updated to match backend route
           {},
           {
             headers: {
@@ -93,18 +96,21 @@ api.interceptors.response.use(
   }
 );
 
+// Set token and reconnect sockets
 export const setToken = (newToken) => {
   token = newToken;
   localStorage.setItem('token', newToken);
   reconnectSockets();
 };
 
+// Clear token and disconnect sockets
 export const clearToken = () => {
   token = null;
   localStorage.removeItem('token');
   disconnectSockets();
 };
 
+// Reconnect Socket.IO connections
 const reconnectSockets = () => {
   disconnectSockets();
   if (token) {
@@ -154,6 +160,7 @@ const reconnectSockets = () => {
   }
 };
 
+// Disconnect Socket.IO connections
 const disconnectSockets = () => {
   if (socketJobs) {
     socketJobs.disconnect();
@@ -173,45 +180,63 @@ if (token) {
   reconnectSockets();
 }
 
+// Authentication API calls
 export const login = async (email, password) => {
-  const response = await api.post('/api/auth/login', { email, password });
-  setToken(response.data.access_token);
-  localStorage.setItem('refresh_token', response.data.refresh_token);
-  localStorage.setItem('role', response.data.role);
-  localStorage.setItem('email', response.data.user.email);
-  return response.data;
+  try {
+    const response = await api.post('/auth/login', { email, password });
+    setToken(response.data.access_token);
+    localStorage.setItem('refresh_token', response.data.refresh_token);
+    localStorage.setItem('role', response.data.role);
+    localStorage.setItem('email', response.data.user.email);
+    return response.data;
+  } catch (error) {
+    throw error; // Let the calling function handle the error
+  }
 };
 
 export const googleLogin = async (credential) => {
-  const response = await api.post('/api/auth/google', { credential });
-  setToken(response.data.access_token);
-  localStorage.setItem('refresh_token', response.data.refresh_token);
-  localStorage.setItem('role', response.data.role);
-  localStorage.setItem('email', response.data.user.email);
-  return response.data;
+  try {
+    const response = await api.post('/auth/google', { credential });
+    setToken(response.data.access_token);
+    localStorage.setItem('refresh_token', response.data.refresh_token);
+    localStorage.setItem('role', response.data.role);
+    localStorage.setItem('email', response.data.user.email);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
-export const register = async (userData) => {
-  const response = await api.post('/api/auth/register', userData);
-  setToken(response.data.access_token);
-  localStorage.setItem('refresh_token', response.data.refresh_token);
-  localStorage.setItem('role', response.data.role);
-  localStorage.setItem('email', response.data.user.email);
-  return response.data;
+// Updated register function to match the new structure (email and password only)
+export const register = async ({ email, password }) => {
+  try {
+    const response = await api.post('/auth/register', { email, password });
+    setToken(response.data.access_token);
+    localStorage.setItem('refresh_token', response.data.refresh_token);
+    localStorage.setItem('role', response.data.role);
+    localStorage.setItem('email', response.data.user.email);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const getCurrentUser = async () => {
-  const response = await api.get('/api/auth/me');
-  return response.data;
+  try {
+    const response = await api.get('/auth/me');
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const logout = async () => {
   try {
-    const response = await api.post('/api/auth/logout');
+    const response = await api.post('/auth/logout');
     clearToken();
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('role');
-    localStorage.removeItem('email');
+    localStorage.setItem('email');
     return response.data;
   } catch (error) {
     clearToken();
@@ -223,68 +248,111 @@ export const logout = async () => {
 };
 
 export const forgotPassword = async (email) => {
-  const response = await api.post('/api/auth/forgot-password', { email });
-  return response.data;
+  try {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const resetPassword = async (token, password) => {
-  const response = await api.post('/api/auth/reset-password', { token, password });
-  return response.data;
+  try {
+    const response = await api.post('/auth/reset-password', { token, password });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
+// Job-related API calls
 export const createJob = async (formData) => {
-  const response = await api.post('/api/jobs', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-  return response.data;
+  try {
+    const response = await api.post('/api/jobs', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const getJobs = async () => {
-  const response = await api.get('/api/jobs');
-  return response.data;
+  try {
+    const response = await api.get('/api/jobs');
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const getJob = async (jobId) => {
-  const response = await api.get(`/api/jobs/${jobId}`);
-  return response.data;
+  try {
+    const response = await api.get(`/api/jobs/${jobId}`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const updateJob = async (jobId, updates) => {
-  const response = await api.put(`/api/jobs/${jobId}`, updates);
-  return response.data;
+  try {
+    const response = await api.put(`/api/jobs/${jobId}`, updates);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
+// Message-related API calls
 export const sendMessage = async (formData, jobId = null) => {
-  const url = jobId ? `/api/jobs/${jobId}/messages` : '/api/messages';
-  if (!jobId) {
-    formData.append('recipient_id', '1'); // Assuming admin ID is 1; adjust as needed
+  try {
+    const url = jobId ? `/api/jobs/${jobId}/messages` : '/api/messages';
+    if (!jobId) {
+      formData.append('recipient_id', '1'); // Assuming admin ID is 1; adjust as needed
+    }
+    const response = await api.post(url, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
   }
-  const response = await api.post(url, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-  return response.data;
 };
 
 export const editMessage = async (messageId, content) => {
-  const response = await api.put(`/api/messages/${messageId}`, { content });
-  return response.data;
+  try {
+    const response = await api.put(`/api/messages/${messageId}`, { content });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const deleteMessage = async (messageId) => {
-  const response = await api.delete(`/api/messages/${messageId}`);
-  return response.data;
+  try {
+    const response = await api.delete(`/api/messages/${messageId}`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const getMessages = async (jobId = null) => {
-  const url = jobId ? `/api/jobs/${jobId}/messages` : '/api/messages';
-  const response = await api.get(url);
-  return response.data;
+  try {
+    const url = jobId ? `/api/jobs/${jobId}/messages` : '/api/messages';
+    const response = await api.get(url);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
 };
 
+// File download API call
 export const getFile = async (filename) => {
   try {
     const normalizedFilename = filename.replace(/\\/g, '/');

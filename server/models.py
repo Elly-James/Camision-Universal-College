@@ -6,7 +6,7 @@ class User(db.Model):
     __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    username = db.Column(db.String(80), unique=True, nullable=True, index=True)  # Changed to nullable=True as username is no longer required
     name = db.Column(db.String(120), nullable=False)
     password_hash = db.Column(db.String(128))
     role = db.Column(db.String(50), default='client')
@@ -28,7 +28,7 @@ class User(db.Model):
         return {
             'id': self.id,
             'email': self.email,
-            'username': self.username,
+            'username': self.username,  # May be None if not set during registration
             'name': self.name,
             'role': self.role,
             'created_at': self.created_at.isoformat(),

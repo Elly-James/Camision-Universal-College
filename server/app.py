@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Allowed file extensions for uploads
-ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg'}
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg', 'zip'}
 
 def create_app(config_name='development'):
     """Application factory function"""
@@ -45,7 +45,7 @@ def create_app(config_name='development'):
     # Ensure upload folder is set
     app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'Uploads')
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 16MB max file size
     
     # Initialize extensions
     initialize_extensions(app)

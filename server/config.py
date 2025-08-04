@@ -10,7 +10,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL')
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'Uploads')
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB upload limit
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB upload limit
     FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
     
     # Mail configuration
@@ -39,7 +39,7 @@ class ProductionConfig(Config):
         'pool_size': 10,
         'max_overflow': 20,
     }
-    RATE_LIMITS = ["200 per day", "50 per hour"]
+    RATE_LIMITS = ["1000 per day", "200 per hour"]
 
 config = {
     'development': DevelopmentConfig,
