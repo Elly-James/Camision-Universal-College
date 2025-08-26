@@ -5,6 +5,7 @@ import jwt
 import logging
 import os
 from werkzeug.utils import secure_filename
+import requests
 from extensions import db, socketio
 from models import Job, User, Message
 from sqlalchemy import and_, or_
@@ -19,7 +20,6 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def sanitize_filename(filename):
-    """Sanitize filename to prevent path issues"""
     return filename.replace('..', '.')
 
 @jobs_bp.route('', methods=['POST', 'OPTIONS'])
@@ -34,7 +34,7 @@ def create_job():
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
@@ -62,7 +62,6 @@ def create_job():
                     deadline = deadline.replace(tzinfo=timezone.utc)
                 
                 current_time = datetime.now(timezone.utc)
-                
                 if deadline < current_time:
                     return jsonify({
                         "error": "Deadline must be in the future",
@@ -88,51 +87,63 @@ def create_job():
             except ValueError:
                 return jsonify({"error": "Pages and totalAmount must be positive numbers"}), 400
 
-            # Create job with proper data
-            job = Job(
-                user_id=user.id,
-                client_name=user.name,
-                client_email=user.email,
-                subject=data['subject'],
-                title=data['title'],
-                pages=pages,
-                deadline=deadline,
-                instructions=data['instructions'],
-                cited_resources=cited_resources,
-                formatting_style=data.get('formattingStyle', 'APA'),
-                writer_level=data.get('writerLevel', 'PHD'),
-                spacing=data.get('spacing', 'double'),
-                total_amount=total_amount,
-                status='Pending'
-            )
-
-            # Handle file uploads with job-specific folder
-            db.session.add(job)
-            db.session.flush()  # Get job ID before commit
-            job_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], f"job_{job.id}")
-            os.makedirs(job_folder, exist_ok=True)
-            file_paths = []
-            for file in files:
-                if file and file.filename:
-                    if not allowed_file(file.filename):
-                        return jsonify({"error": f"File type not allowed for {file.filename}"}), 400
-                    filename = secure_filename(sanitize_filename(file.filename))
-                    filename = f"initial-{datetime.now().timestamp()}-{filename}"
-                    file_path = os.path.join(job_folder, filename)
-                    file.save(file_path)
-                    file_paths.append(os.path.join(f"job_{job.id}", filename))
+            # Calculate rates based on education level
+            education_level = data.get('writerLevel', 'highschool').lower()
+            rates = {
+                'highschool': 6,
+                'college': 9,
+                'bachelors': 12,
+                'masters': 15,
+                'phd': 18
+            }
+            calculated_total = pages * rates.get(education_level, 6)
             
-            job.files = file_paths
-            db.session.commit()
+            if abs(calculated_total - total_amount) > 0.01:
+                return jsonify({
+                    "error": "Total amount doesn't match calculated amount",
+                    "details": f"Calculated: ${calculated_total}, Provided: ${total_amount}"
+                }), 400
 
-            # Emit event to admin
-            socketio.emit('new_job', job.to_dict(), namespace='/jobs')
-            logger.info(f"Job created successfully: {job.id}")
-            return jsonify(job.to_dict()), 201
+            # Prepare payment data (no job creation here)
+            payment_data = {
+                'pages': pages,
+                'education_level': education_level,
+                'title': data['title'],
+                'subject': data['subject'],
+                'deadline': deadline.isoformat(),
+                'instructions': data['instructions'],
+                'phone_number': data.get('phone_number', ''),
+                'country_code': data.get('country_code', 'KE'),
+                'citedResources': cited_resources,
+                'formattingStyle': data.get('formattingStyle', 'APA'),
+                'writerLevel': data.get('writerLevel', 'PHD'),
+                'spacing': data.get('spacing', 'double'),
+                'totalAmount': total_amount,
+                # Files handled in payments.py
+            }
+            
+            # Send files with payment request
+            files_data = [('files', (file.filename, file, file.mimetype)) for file in files if file and allowed_file(file.filename)]
+            payment_response = requests.post(
+                f"{request.host_url}api/payments/initiate-upfront",
+                data=payment_data,
+                files=files_data,
+                headers={'Authorization': f'Bearer {token}'}
+            )
+            if payment_response.status_code != 200:
+                return jsonify({'error': 'Payment initiation failed', 'details': payment_response.json()}), 400
+
+            payment_response_data = payment_response.json()
+            logger.info(f"Job creation initiated with payment, redirect to: {payment_response_data['redirect_url']}")
+            return jsonify({
+                'message': 'Job creation initiated, redirect to Pesapal for payment',
+                'job_id': payment_response_data.get('job_id'),
+                'redirect_url': payment_response_data['redirect_url'],
+                'order_tracking_id': payment_response_data.get('order_tracking_id')
+            }), 200
 
         except Exception as e:
             logger.error(f"Job creation failed: {str(e)}", exc_info=True)
-            db.session.rollback()
             return jsonify({
                 "error": "Failed to create job",
                 "details": str(e)
@@ -155,14 +166,14 @@ def get_jobs():
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
 
         user = g.current_user
         if user.role == 'admin':
-            jobs = Job.query.all()
+            jobs = Job.query.filter(Job.payment_status != 'Pending').all()
         else:
             jobs = Job.query.filter_by(user_id=user.id).all()
 
@@ -170,7 +181,8 @@ def get_jobs():
         return jsonify([{
             **job.to_dict(),
             'client_name': job.client_name,
-            'client_email': job.client_email
+            'client_email': job.client_email,
+            'payment_status': job.payment_status
         } for job in jobs])
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Token expired'}), 401
@@ -189,7 +201,7 @@ def get_job(job_id):
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
@@ -203,7 +215,6 @@ def get_job(job_id):
             logger.error(f"Unauthorized job access attempt by user ID: {user.id} for job ID: {job_id}")
             return jsonify({"error": "Unauthorized"}), 403
 
-        # Fetch messages between client and admin
         admin = User.query.filter_by(role='admin').first()
         if not admin:
             return jsonify({"error": "Admin not found"}), 404
@@ -220,7 +231,6 @@ def get_job(job_id):
             )
         ).order_by(Message.created_at).all()
 
-        # Aggregate all files (initial, completed, and message files)
         message_files = []
         for message in messages:
             if message.files:
@@ -234,7 +244,8 @@ def get_job(job_id):
             'client_name': job.client_name,
             'client_email': job.client_email,
             'messages': [msg.to_dict() for msg in messages],
-            'all_files': all_files
+            'all_files': all_files,
+            'payment_status': job.payment_status
         })
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Token expired'}), 401
@@ -256,7 +267,7 @@ def update_job(job_id):
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
@@ -273,6 +284,19 @@ def update_job(job_id):
         data = request.get_json()
         if 'status' in data:
             job.status = data['status']
+            if data['status'] == 'Completed' and job.payment_status == 'Partial':
+                payment_data = {
+                    'job_id': job.id,
+                    'phone_number': '',
+                    'country_code': 'KE'
+                }
+                payment_response = requests.post(
+                    f"{request.host_url}api/payments/initiate-completion",
+                    json=payment_data,
+                    headers={'Authorization': f'Bearer {token}'}
+                )
+                if payment_response.status_code != 200:
+                    return jsonify({'error': 'Completion payment initiation failed', 'details': payment_response.json()}), 400
             if data['status'] == 'Completed':
                 job.completed = True
             db.session.commit()

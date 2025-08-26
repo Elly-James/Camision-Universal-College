@@ -24,6 +24,12 @@ class Config:
     # JWT configuration
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+    
+    # Pesapal configuration
+    PESAPAL_CONSUMER_KEY = os.getenv('PESAPAL_CONSUMER_KEY')
+    PESAPAL_CONSUMER_SECRET = os.getenv('PESAPAL_CONSUMER_SECRET')
+    PESAPAL_ENVIRONMENT = os.getenv('PESAPAL_ENVIRONMENT', 'sandbox')  # 'sandbox' or 'live'
+    PESAPAL_ADMIN_EMAIL = os.getenv('PESAPAL_ADMIN_EMAIL', 'admin@example.com')  # Admin email for notifications
 
 class DevelopmentConfig(Config):
     DEBUG = True

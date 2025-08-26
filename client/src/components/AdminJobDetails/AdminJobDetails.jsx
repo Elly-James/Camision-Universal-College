@@ -9,10 +9,11 @@ import {
   getSocketMessages,
   getJob,
   getMessages,
+  getPaymentStatus,
 } from '../../utils/api.js';
 import toast from 'react-hot-toast';
 import './AdminJobDetails.css';
-import { FaTrash, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
+import { FaTrash, FaEdit, FaSave, FaTimes, FaSync } from 'react-icons/fa';
 
 const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePreview, isDownloading }) => {
   const { user, role, token } = useContext(AuthContext);
@@ -22,6 +23,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editedMessageContent, setEditedMessageContent] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const [hiddenMessageIds, setHiddenMessageIds] = useState(() => {
     const stored = localStorage.getItem('adminHiddenMessageIds');
     return stored ? JSON.parse(stored) : [];
@@ -60,27 +62,53 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
           toast.success('Job updated');
         }
       });
+      socketJobs.on('payment_status_updated', async ({ job_id, payment_status, order_tracking_id }) => {
+        if (job_id === localJob.id) {
+          try {
+            const response = await getJob(localJob.id);
+            setLocalJob({
+              ...response,
+              messages: response.messages.filter((msg) => !hiddenMessageIds.includes(msg.id)),
+              completed_files: response.completed_files || [],
+              all_files: response.all_files || [],
+            });
+            onUpdate();
+            toast.success(`Payment status updated to ${payment_status}`);
+          } catch (error) {
+            console.error('Failed to refresh job after payment update:', error);
+            toast.error('Failed to refresh job data');
+          }
+        }
+      });
     }
 
     if (socketMessages) {
       socketMessages.on('new_general_message', (message) => {
-        if (message.client_id === localJob.user_id && message.sender_role !== 'admin' && !hiddenMessageIds.includes(message.id)) {
+        if (
+          message.client_id === localJob.user_id &&
+          message.sender_role !== 'admin' &&
+          !hiddenMessageIds.includes(message.id)
+        ) {
           setLocalJob((prev) => ({
             ...prev,
             messages: [...(prev.messages || []), message],
             all_files: [...(prev.all_files || []), ...(message.files || [])],
-            completed_files: message.files?.some(f => f.includes('completed-')) 
-              ? [...(prev.completed_files || []), ...(message.files.filter(f => f.includes('completed-')))] 
+            completed_files: message.files?.some((f) => f.includes('completed-'))
+              ? [...(prev.completed_files || []), ...(message.files.filter((f) => f.includes('completed-')))]
               : prev.completed_files,
           }));
           toast.success('New message received from client');
-        } else if (message.sender_role === 'admin' && message.recipient_id === localJob.user_id && !hiddenMessageIds.includes(message.id)) {
+        } else if (
+          message.sender_role === 'admin' &&
+          message.recipient_id === localJob.user_id &&
+          !hiddenMessageIds.includes(message.id)
+        ) {
           setLocalJob((prev) => ({
             ...prev,
             messages: [...(prev.messages || []), message],
             all_files: [...(prev.all_files || []), ...(message.files || [])],
-            completed_files: message.files?.some(f => f.includes('completed-')) 
-              ? [...(prev.completed_files || []), ...(message.files.filter(f => f.includes('completed-')))] 
+            completed_files: message.files?.some((f) => f.includes('completed-'))
+              ? [...(prev.completed_files || []), ...(message.files.filter((f) => f.includes('completed-')))]
               : prev.completed_files,
           }));
           toast.success('Your message sent successfully');
@@ -114,6 +142,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
     return () => {
       if (socketJobs) {
         socketJobs.off('job_updated');
+        socketJobs.off('payment_status_updated');
       }
       if (socketMessages) {
         socketMessages.off('new_general_message');
@@ -137,7 +166,37 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       toast.success('Job status updated successfully!');
     } catch (error) {
       console.error('Job status update failed:', error);
-      toast.error(error.error || error.message || 'Failed to update job status');
+      toast.error(error.error || 'Failed to update job status');
+    }
+  };
+
+  const checkPaymentStatus = async () => {
+    if (!localJob.order_tracking_id && !localJob.completion_tracking_id) {
+      toast.error('No payment tracking ID available');
+      return;
+    }
+    setIsCheckingPayment(true);
+    try {
+      const trackingId = localJob.completion_tracking_id || localJob.order_tracking_id;
+      const response = await getPaymentStatus(trackingId);
+      if (response.payment_status !== localJob.payment_status) {
+        const jobResponse = await getJob(localJob.id);
+        setLocalJob({
+          ...jobResponse,
+          messages: jobResponse.messages.filter((msg) => !hiddenMessageIds.includes(msg.id)),
+          completed_files: jobResponse.completed_files || [],
+          all_files: jobResponse.all_files || [],
+        });
+        onUpdate();
+        toast.success(`Payment status updated to ${response.payment_status}`);
+      } else {
+        toast.info('No change in payment status');
+      }
+    } catch (error) {
+      console.error('Payment status check failed:', error);
+      toast.error(error.error || 'Failed to check payment status');
+    } finally {
+      setIsCheckingPayment(false);
     }
   };
 
@@ -164,7 +223,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       toast.success('Message sent successfully!');
     } catch (error) {
       console.error('Send message failed:', error);
-      toast.error(error.error || error.message || 'Failed to send message');
+      toast.error(error.error || 'Failed to send message');
     } finally {
       setIsUploading(false);
     }
@@ -192,9 +251,12 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       });
       setCompletedFiles([]);
       toast.success('Completed files uploaded successfully!');
+      if (localJob.status !== 'Completed') {
+        await updateJobStatus('Completed');
+      }
     } catch (error) {
       console.error('Upload completed files failed:', error);
-      toast.error(error.error || error.message || 'Failed to upload completed files');
+      toast.error(error.error || 'Failed to upload completed files');
     } finally {
       setIsUploading(false);
     }
@@ -224,7 +286,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       toast.success('Message updated successfully!');
     } catch (error) {
       console.error('Edit message failed:', error);
-      toast.error(error.error || error.message || 'Failed to edit message');
+      toast.error(error.error || 'Failed to edit message');
     }
   };
 
@@ -239,12 +301,12 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       });
       setLocalJob((prev) => ({
         ...prev,
-        messages: prev.messages.filter((msg) => msg.id !== messageId),
+        messages: prev.messages.filter((m) => m.id !== messageId),
       }));
       toast.success('Message deleted successfully!');
     } catch (error) {
       console.error('Delete message failed:', error);
-      toast.error(error.error || error.message || 'Failed to delete message');
+      toast.error(error.error || 'Failed to delete message');
     }
   };
 
@@ -266,7 +328,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       toast.success('Chat history cleared successfully!');
     } catch (error) {
       console.error('Clear chat history failed:', error);
-      toast.error(error.error || error.message || 'Failed to clear chat history');
+      toast.error(error.error || 'Failed to clear chat history');
     }
   };
 
@@ -298,6 +360,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
             <p><strong>Writer Level:</strong> {localJob.writer_level}</p>
             <p><strong>Status:</strong> {localJob.status}</p>
             <p><strong>Total Amount:</strong> ${localJob.total_amount}</p>
+            <p><strong>Payment Status:</strong> {localJob.payment_status}</p>
           </div>
         </div>
 
@@ -316,10 +379,24 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
               onChange={(e) => updateJobStatus(e.target.value)}
               className="form-input"
             >
-              <option value="Pending">Pending</option>
+              <option value="Pending Payment">Pending Payment</option>
               <option value="In Progress">In Progress</option>
               <option value="Completed">Completed</option>
             </select>
+          </div>
+        </div>
+
+        <div className="job-details-card">
+          <h3>Payment Status</h3>
+          <div className="payment-status">
+            <button
+              onClick={checkPaymentStatus}
+              disabled={isCheckingPayment || (!localJob.order_tracking_id && !localJob.completion_tracking_id)}
+              className="action-button"
+            >
+              {isCheckingPayment ? 'Checking...' : 'Check Payment Status'}
+              <FaSync style={{ marginLeft: '5px' }} />
+            </button>
           </div>
         </div>
 
@@ -427,7 +504,9 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
                       </div>
                     ) : (
                       <>
-                        <p><strong>{msg.sender_role === 'admin' ? 'You' : 'Client'}:</strong> {msg.content}</p>
+                        <p>
+                          <strong>{msg.sender_role === 'admin' ? 'You' : 'Client'}:</strong> {msg.content}
+                        </p>
                         <small>{new Date(msg.created_at).toLocaleString()}</small>
                         {msg.sender_role === 'admin' && (
                           <div className="message-actions">
@@ -535,6 +614,11 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
             </div>
           </div>
         )}
+      </div>
+      <div className="payment-status-button">
+        <button className="payment-status">
+          Remaining 75% Payment: {localJob.payment_status === 'Completed' ? 'Paid' : localJob.payment_status}
+        </button>
       </div>
     </div>
   );

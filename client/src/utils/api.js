@@ -11,7 +11,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Enable credentials for CORS
+  withCredentials: true,
 });
 
 // Request Interceptor: Add Authorization header with token if available
@@ -56,7 +56,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       try {
         const refreshResponse = await axios.post(
-          `${API_URL}/auth/refresh`, // Updated to match backend route
+          `${API_URL}/auth/refresh`,
           {},
           {
             headers: {
@@ -190,7 +190,7 @@ export const login = async (email, password) => {
     localStorage.setItem('email', response.data.user.email);
     return response.data;
   } catch (error) {
-    throw error; // Let the calling function handle the error
+    throw error;
   }
 };
 
@@ -207,7 +207,6 @@ export const googleLogin = async (credential) => {
   }
 };
 
-// Updated register function to match the new structure (email and password only)
 export const register = async ({ email, password }) => {
   try {
     const response = await api.post('/auth/register', { email, password });
@@ -236,7 +235,7 @@ export const logout = async () => {
     clearToken();
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('role');
-    localStorage.setItem('email');
+    localStorage.removeItem('email');
     return response.data;
   } catch (error) {
     clearToken();
@@ -268,11 +267,12 @@ export const resetPassword = async (token, password) => {
 // Job-related API calls
 export const createJob = async (formData) => {
   try {
-    const response = await api.post('/api/jobs', formData, {
+    const config = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-    });
+    };
+    const response = await api.post('/api/jobs', formData, config);
     return response.data;
   } catch (error) {
     throw error;
@@ -310,14 +310,15 @@ export const updateJob = async (jobId, updates) => {
 export const sendMessage = async (formData, jobId = null) => {
   try {
     const url = jobId ? `/api/jobs/${jobId}/messages` : '/api/messages';
-    if (!jobId) {
-      formData.append('recipient_id', '1'); // Assuming admin ID is 1; adjust as needed
-    }
-    const response = await api.post(url, formData, {
+    const config = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-    });
+    };
+    if (!jobId) {
+      formData.append('recipient_id', '1');
+    }
+    const response = await api.post(url, formData, config);
     return response.data;
   } catch (error) {
     throw error;
@@ -352,17 +353,77 @@ export const getMessages = async (jobId = null) => {
   }
 };
 
+// Payment-related API calls
+export const initiatePayment = async (payload) => {
+  try {
+    const config = {
+      headers: {},
+    };
+    // Route to appropriate endpoint based on payload
+    const url = payload.job_id ? '/api/payments/initiate-completion' : '/api/payments/initiate-upfront';
+    if (payload instanceof FormData) {
+      config.headers['Content-Type'] = 'multipart/form-data';
+    } else {
+      config.headers['Content-Type'] = 'application/json';
+    }
+    const response = await api.post(url, payload, config);
+    return response.data;
+  } catch (error) {
+    console.error('Payment initiation error:', error);
+    throw {
+      error: error.error || 'Failed to initiate payment',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
+  }
+};
+
+export const getPaymentStatus = async (orderTrackingId) => {
+  try {
+    let attempts = 0;
+    const maxAttempts = 3; // Reduced for faster feedback
+    let response;
+    while (attempts < maxAttempts) {
+      try {
+        response = await api.get(`/api/payments/status/${orderTrackingId}`);
+        const status = response.data.payment_status;
+        if (status !== 'PENDING') {
+          return response.data;
+        }
+        attempts++;
+        const backoffTime = Math.pow(2, attempts) * 1000; // 1s, 2s, 4s
+        console.warn(`Payment status PENDING, retrying after ${backoffTime}ms (attempt ${attempts}/${maxAttempts})`);
+        await delay(backoffTime);
+      } catch (error) {
+        attempts++;
+        if (attempts === maxAttempts) {
+          throw error;
+        }
+        const backoffTime = Math.pow(2, attempts) * 1000;
+        console.warn(`Payment status check failed, retrying after ${backoffTime}ms (attempt ${attempts}/${maxAttempts})`);
+        await delay(backoffTime);
+      }
+    }
+    throw new Error('Payment status still PENDING after maximum retries');
+  } catch (error) {
+    console.error('Payment status check failed:', error);
+    throw {
+      error: error.error || 'Failed to check payment status',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
+  }
+};
+
 // File download API call
 export const getFile = async (filename) => {
   try {
     const normalizedFilename = filename.replace(/\\/g, '/');
-    const response = await api.get(`/Uploads/${normalizedFilename}`, {
+    const config = {
       responseType: 'blob',
       headers: {
-        Authorization: token ? `Bearer ${token}` : undefined,
         Accept: 'application/octet-stream',
       },
-    });
+    };
+    const response = await api.get(`/Uploads/${normalizedFilename}`, config);
 
     let downloadFilename = normalizedFilename.split('/').pop();
     const contentDisposition = response.headers['content-disposition'];
@@ -386,7 +447,10 @@ export const getFile = async (filename) => {
     return true;
   } catch (error) {
     console.error('File download failed:', error);
-    throw new Error(error.response?.data?.error || 'Failed to download file');
+    throw {
+      error: error.error || 'Failed to download file',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
   }
 };
 

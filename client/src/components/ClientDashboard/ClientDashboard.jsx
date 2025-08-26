@@ -1,23 +1,25 @@
 import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Select from 'react-select';
 import countryList from 'react-select-country-list';
 import Header from '../Header/Header.jsx';
 import { AuthContext } from '../context/AuthContext.jsx';
-import { 
-  getCurrentUser, 
-  createJob, 
-  getJobs, 
-  getJob, 
-  sendMessage, 
-  getMessages, 
-  editMessage, 
-  deleteMessage, 
-  getSocketJobs, 
+import {
+  getCurrentUser,
+  createJob,
+  getJobs,
+  getJob,
+  sendMessage,
+  getMessages,
+  editMessage,
+  deleteMessage,
+  getSocketJobs,
   getSocketMessages,
-  getFile 
+  getFile,
+  initiatePayment,
+  getPaymentStatus,
 } from '../../utils/api.js';
 import toast from 'react-hot-toast';
 import './ClientDashboard.css';
@@ -25,6 +27,7 @@ import { FaTrash, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
 
 const ClientDashboard = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, role, token } = useContext(AuthContext);
 
   // Form states
@@ -33,19 +36,14 @@ const ClientDashboard = () => {
   const [pages, setPages] = useState(1);
   const [deadline, setDeadline] = useState(new Date());
   const [instructions, setInstructions] = useState('');
-  const [citedResources, setCitedResources] = useState(0);
+  const [writerLevel, setWriterLevel] = useState('highschool');
   const [formattingStyle, setFormattingStyle] = useState('APA');
-  const [writerLevel, setWriterLevel] = useState('PHD');
   const [spacing, setSpacing] = useState('double');
+  const [citedResources, setCitedResources] = useState(0);
   const [files, setFiles] = useState([]);
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
-  const [cvc, setCvc] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [country, setCountry] = useState(null);
-  const [postalCode, setPostalCode] = useState('');
-  const [additionalFiles, setAdditionalFiles] = useState([]);
+  const [phoneNumber, setPhoneNumber] = useState(user?.phone || '+254712345678');
+  const [countryCode, setCountryCode] = useState('KE');
+  const [isPostingJob, setIsPostingJob] = useState(false);
 
   // Dashboard states
   const [activeJobs, setActiveJobs] = useState([]);
@@ -62,6 +60,7 @@ const ClientDashboard = () => {
     const stored = localStorage.getItem('hiddenMessageIds');
     return stored ? JSON.parse(stored) : [];
   });
+  const [additionalFiles, setAdditionalFiles] = useState([]);
 
   const countryOptions = useMemo(() => countryList().getData(), []);
 
@@ -149,6 +148,34 @@ const ClientDashboard = () => {
     };
   }, [user, role, navigate, selectedJob, hiddenMessageIds]);
 
+  useEffect(() => {
+    const orderTrackingId = searchParams.get('OrderTrackingId');
+    const jobId = searchParams.get('job_id');
+    const paymentType = searchParams.get('type');
+
+    if (orderTrackingId && jobId) {
+      (async () => {
+        try {
+          const status = await getPaymentStatus(orderTrackingId);
+          if (status.payment_status === 'Completed') {
+            toast.success(`${paymentType === 'completion' ? 'Remaining' : 'Upfront'} payment completed!`);
+            await fetchData();
+            navigate('/client-dashboard?tab=activeJobs');
+          } else if (status.payment_status === 'Failed' || status.payment_status === 'Invalid') {
+            toast.error(`${paymentType === 'completion' ? 'Remaining' : 'Upfront'} payment failed or was cancelled.`);
+            navigate('/client-dashboard?tab=newOrder');
+          } else {
+            toast.error('Payment status pending. Please wait and try again.');
+            navigate('/client-dashboard?tab=newOrder');
+          }
+        } catch (error) {
+          toast.error(error.error || `Error verifying ${paymentType === 'completion' ? 'remaining' : 'upfront'} payment.`);
+          navigate('/client-dashboard?tab=newOrder');
+        }
+      })();
+    }
+  }, [searchParams, navigate]);
+
   const fetchData = async () => {
     try {
       const [userData, jobsData, messagesData] = await Promise.all([
@@ -160,44 +187,19 @@ const ClientDashboard = () => {
       setCompletedJobs(jobsData.filter((job) => job.status === 'Completed'));
       setChatMessages(messagesData.filter((msg) => !hiddenMessageIds.includes(msg.id)));
     } catch (error) {
-      toast.error(error.message || 'Failed to load data');
-      if (error.message.includes('Token')) {
+      toast.error(error.error || 'Failed to load data');
+      if (error.error?.includes('Token')) {
         navigate('/auth');
       }
     }
   };
 
   const calculateTotalAmount = () => {
-    const wordsPerPage = spacing === 'single' ? 550 : 275;
-    const ratePerWord = {
-      PHD: 0.15,
-      Masters: 0.12,
-      Undergraduate: 0.10,
-      'High School': 0.08,
-      Primary: 0.05,
-    }[writerLevel] || 0.10;
-    return (pages * wordsPerPage * ratePerWord).toFixed(2);
+    const rates = { highschool: 6, college: 9, bachelors: 12, masters: 15, phd: 18 };
+    return pages * (rates[writerLevel] || 6);
   };
 
-  const resetForm = () => {
-    setSubject('');
-    setTitle('');
-    setPages(1);
-    setDeadline(new Date());
-    setInstructions('');
-    setCitedResources(0);
-    setFormattingStyle('APA');
-    setWriterLevel('PHD');
-    setSpacing('double');
-    setFiles([]);
-    setCardNumber('');
-    setExpiryDate('');
-    setCvc('');
-    setFirstName('');
-    setLastName('');
-    setCountry(null);
-    setPostalCode('');
-  };
+  const calculateUpfrontAmount = () => (calculateTotalAmount() * 0.25).toFixed(2);
 
   const handlePostJob = async (e) => {
     e.preventDefault();
@@ -206,31 +208,63 @@ const ClientDashboard = () => {
       toast.error('Deadline must be in the future');
       return;
     }
+
+    setIsPostingJob(true);
     try {
-      const totalAmount = calculateTotalAmount();
       const formData = new FormData();
-      
       formData.append('subject', subject);
       formData.append('title', title);
-      formData.append('pages', pages);
-      const deadlineISO = deadline.toISOString();
-      formData.append('deadline', deadlineISO);
+      formData.append('pages', pages.toString());
+      formData.append('deadline', deadline.toISOString());
       formData.append('instructions', instructions);
-      formData.append('citedResources', citedResources);
-      formData.append('formattingStyle', formattingStyle);
       formData.append('writerLevel', writerLevel);
+      formData.append('formattingStyle', formattingStyle);
       formData.append('spacing', spacing);
-      formData.append('totalAmount', totalAmount);
-      files.forEach(file => formData.append('files', file));
-      if (token) formData.append('token', token);
+      formData.append('citedResources', citedResources.toString());
+      formData.append('totalAmount', calculateTotalAmount().toString());
+      formData.append('phone_number', phoneNumber);
+      formData.append('country_code', countryCode);
+      files.forEach((file) => formData.append('files', file));
 
       const response = await createJob(formData);
-      toast.success('Job posted successfully!');
-      resetForm();
-      await fetchData();
-      setCurrentTab('activeJobs');
+      if (response.redirect_url) {
+        window.location.href = response.redirect_url;
+      } else {
+        throw new Error(response.error || 'No redirect URL received from server');
+      }
     } catch (error) {
-      toast.error(error.response?.data?.error || error.message || 'Failed to post job');
+      console.error('Job creation or payment initiation error:', error);
+      let errorMessage = error.error || 'Failed to create job or initiate payment';
+      if (error.error?.includes('IPN not registered')) {
+        errorMessage = 'Payment system not configured. Please contact support.';
+      } else if (error.error?.includes('authenticate with Pesapal')) {
+        errorMessage = 'Payment gateway authentication failed. Please try again later.';
+      }
+      toast.error(errorMessage);
+    } finally {
+      setIsPostingJob(false);
+    }
+  };
+
+  const handleRemainingPayment = async (jobId) => {
+    try {
+      const response = await initiatePayment({ job_id: jobId, payment_type: 'completion', phone_number: phoneNumber, country_code: countryCode });
+      if (response.redirect_url) {
+        window.location.href = response.redirect_url;
+      } else {
+        throw new Error(response.error || 'No redirect URL received for remaining payment');
+      }
+    } catch (error) {
+      console.error('Remaining payment initiation error:', error);
+      let errorMessage = error.error || 'Failed to initiate remaining payment';
+      if (error.error?.includes('IPN not registered')) {
+        errorMessage = 'Payment system not configured. Please contact support.';
+      } else if (error.error?.includes('authenticate with Pesapal')) {
+        errorMessage = 'Payment gateway authentication failed. Please try again later.';
+      } else if (error.error?.includes('Invalid job or already paid')) {
+        errorMessage = 'Job not eligible for payment or already paid.';
+      }
+      toast.error(errorMessage);
     }
   };
 
@@ -239,24 +273,23 @@ const ClientDashboard = () => {
       const job = await getJob(jobId);
       setSelectedJob({
         ...job,
-        messages: job.messages.filter(msg => !hiddenMessageIds.includes(msg.id)),
+        messages: job.messages.filter((msg) => !hiddenMessageIds.includes(msg.id)),
       });
       setCurrentTab('jobDetails');
       setAdditionalFiles([]);
     } catch (error) {
-      toast.error(error.message || 'Job not found');
+      toast.error(error.error || 'Job not found');
     }
   };
 
   const downloadFile = async (filename) => {
     setIsDownloading(true);
     try {
-      // Ensure filename is correctly formatted
       const normalizedFilename = filename.replace(/\\/g, '/');
       await getFile(normalizedFilename);
       toast.success('File downloaded successfully!');
     } catch (error) {
-      toast.error(error.message || 'Failed to download file');
+      toast.error(error.error || 'Failed to download file');
       console.error('Download error:', error);
     } finally {
       setIsDownloading(false);
@@ -271,45 +304,48 @@ const ClientDashboard = () => {
     setIsUploading(true);
     try {
       const formData = new FormData();
-      additionalFiles.forEach(file => formData.append('files', file));
-      if (token) formData.append('token', token);
+      additionalFiles.forEach((file) => formData.append('files', file));
       formData.append('content', 'Additional files uploaded');
+      if (token) formData.append('token', token);
 
       await sendMessage(formData, selectedJob.id);
       const updatedJob = await getJob(selectedJob.id);
       setSelectedJob({
         ...updatedJob,
-        messages: updatedJob.messages.filter(msg => !hiddenMessageIds.includes(msg.id)),
+        messages: updatedJob.messages.filter((msg) => !hiddenMessageIds.includes(msg.id)),
       });
       setAdditionalFiles([]);
       toast.success('Additional files uploaded successfully!');
     } catch (error) {
-      toast.error(error.message || 'Failed to upload additional files');
+      toast.error(error.error || 'Failed to upload additional files');
     } finally {
       setIsUploading(false);
     }
   };
 
-  const sendChatMessage = useCallback(async (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-    }
-    if ((e.type === 'click' || (e.key === 'Enter' && !e.shiftKey)) && newChatMessage.trim()) {
-      try {
-        const formData = new FormData();
-        formData.append('content', newChatMessage);
-        if (token) formData.append('token', token);
-
-        await sendMessage(formData);
-        setNewChatMessage('');
-        const messages = await getMessages();
-        setChatMessages(messages.filter((msg) => !hiddenMessageIds.includes(msg.id)));
-        toast.success('Message sent successfully!');
-      } catch (error) {
-        toast.error(error.message || 'Failed to send message');
+  const sendChatMessage = useCallback(
+    async (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
       }
-    }
-  }, [newChatMessage, token, hiddenMessageIds]);
+      if ((e.type === 'click' || (e.key === 'Enter' && !e.shiftKey)) && newChatMessage.trim()) {
+        try {
+          const formData = new FormData();
+          formData.append('content', newChatMessage);
+          if (token) formData.append('token', token);
+
+          await sendMessage(formData);
+          setNewChatMessage('');
+          const messages = await getMessages();
+          setChatMessages(messages.filter((msg) => !hiddenMessageIds.includes(msg.id)));
+          toast.success('Message sent successfully!');
+        } catch (error) {
+          toast.error(error.error || 'Failed to send message');
+        }
+      }
+    },
+    [newChatMessage, token, hiddenMessageIds]
+  );
 
   const clearChatHistory = async () => {
     if (!window.confirm('Are you sure you want to clear all chat history?')) return;
@@ -328,7 +364,7 @@ const ClientDashboard = () => {
       }
       toast.success('Chat history cleared successfully!');
     } catch (error) {
-      toast.error(error.message || 'Failed to clear chat history');
+      toast.error(error.error || 'Failed to clear chat history');
     }
   };
 
@@ -347,12 +383,12 @@ const ClientDashboard = () => {
         const updatedJob = await getJob(selectedJob.id);
         setSelectedJob({
           ...updatedJob,
-          messages: updatedJob.messages.filter(msg => !hiddenMessageIds.includes(msg.id)),
+          messages: updatedJob.messages.filter((msg) => !hiddenMessageIds.includes(msg.id)),
         });
       }
       toast.success('Message updated successfully!');
     } catch (error) {
-      toast.error(error.message || 'Failed to edit message');
+      toast.error(error.error || 'Failed to edit message');
     }
   };
 
@@ -365,16 +401,16 @@ const ClientDashboard = () => {
         localStorage.setItem('hiddenMessageIds', JSON.stringify(updated));
         return updated;
       });
-      setChatMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+      setChatMessages((prev) => prev.filter((msg) => m.id !== messageId));
       if (selectedJob) {
         setSelectedJob((prev) => ({
           ...prev,
-          messages: prev.messages.filter((msg) => msg.id !== messageId),
+          messages: prev.messages.filter((m) => m.id !== messageId),
         }));
       }
       toast.success('Message deleted successfully!');
     } catch (error) {
-      toast.error(error.message || 'Failed to delete message');
+      toast.error(error.error || 'Failed to delete message');
     }
   };
 
@@ -509,23 +545,24 @@ const ClientDashboard = () => {
                         type="number"
                         min="1"
                         value={pages}
-                        onChange={(e) => setPages(parseInt(e.target.value))}
+                        onChange={(e) => setPages(parseInt(e.target.value) || 1)}
                         required
                       />
-                      <span className="form-hint">
-                        {spacing === 'single' ? '1 page = 550 words' : '1 page = 275 words'}
-                      </span>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="spacing">Spacing</label>
+                      <label htmlFor="writerLevel">Education Level</label>
                       <select
-                        id="spacing"
+                        id="writerLevel"
                         className="form-input"
-                        value={spacing}
-                        onChange={(e) => setSpacing(e.target.value)}
+                        value={writerLevel}
+                        onChange={(e) => setWriterLevel(e.target.value)}
+                        required
                       >
-                        <option value="single">Single</option>
-                        <option value="double">Double</option>
+                        <option value="highschool">High School ($6/page)</option>
+                        <option value="college">College ($9/page)</option>
+                        <option value="bachelors">Bachelors ($12/page)</option>
+                        <option value="masters">Masters ($15/page)</option>
+                        <option value="phd">PhD ($18/page)</option>
                       </select>
                     </div>
                   </div>
@@ -545,16 +582,29 @@ const ClientDashboard = () => {
                       />
                     </div>
                     <div className="form-group">
-                      <label htmlFor="citedResources">Number of Cited Resources</label>
-                      <input
-                        id="citedResources"
-                        className="form-input"
-                        type="number"
-                        min="0"
-                        value={citedResources}
-                        onChange={(e) => setCitedResources(parseInt(e.target.value))}
+                      <label htmlFor="countryCode">Country</label>
+                      <Select
+                        id="countryCode"
+                        options={countryOptions}
+                        value={countryOptions.find((option) => option.value === countryCode)}
+                        onChange={(option) => setCountryCode(option.value)}
+                        placeholder="Select Country"
+                        required
                       />
                     </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="phoneNumber">Phone Number</label>
+                    <input
+                      id="phoneNumber"
+                      className="form-input"
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="Enter your phone number"
+                      required
+                    />
                   </div>
 
                   <div className="form-row">
@@ -565,29 +615,39 @@ const ClientDashboard = () => {
                         className="form-input"
                         value={formattingStyle}
                         onChange={(e) => setFormattingStyle(e.target.value)}
+                        required
                       >
                         <option value="APA">APA</option>
                         <option value="MLA">MLA</option>
                         <option value="Chicago">Chicago</option>
                         <option value="Harvard">Harvard</option>
-                        <option value="IEEE">IEEE</option>
                       </select>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="writerLevel">Writer Level</label>
+                      <label htmlFor="spacing">Spacing</label>
                       <select
-                        id="writerLevel"
+                        id="spacing"
                         className="form-input"
-                        value={writerLevel}
-                        onChange={(e) => setWriterLevel(e.target.value)}
+                        value={spacing}
+                        onChange={(e) => setSpacing(e.target.value)}
+                        required
                       >
-                        <option value="PHD">PHD</option>
-                        <option value="Masters">Masters</option>
-                        <option value="Undergraduate">Undergraduate</option>
-                        <option value="High School">High School</option>
-                        <option value="Primary">Primary</option>
+                        <option value="double">Double</option>
+                        <option value="single">Single</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="citedResources">Cited Resources</label>
+                    <input
+                      id="citedResources"
+                      className="form-input"
+                      type="number"
+                      min="0"
+                      value={citedResources}
+                      onChange={(e) => setCitedResources(parseInt(e.target.value) || 0)}
+                    />
                   </div>
 
                   <div className="form-group">
@@ -637,135 +697,16 @@ const ClientDashboard = () => {
 
                 <div className="form-section payment-section">
                   <h3>Payment Details</h3>
-                  <div className="form-group payment-method">
-                    <label>Payment Method</label>
-                    <div className="payment-options">
-                      <label>
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          value="card"
-                          checked={true}
-                          readOnly
-                        />
-                        Credit/Debit Card
-                      </label>
-                    </div>
-                  </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label htmlFor="cardNumber" className="required">
-                        Card Number
-                      </label>
-                      <input
-                        id="cardNumber"
-                        className="form-input"
-                        type="text"
-                        value={cardNumber}
-                        onChange={(e) => setCardNumber(e.target.value)}
-                        placeholder="1234 5678 9012 3456"
-                        maxLength="19"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label htmlFor="expiryDate" className="required">
-                        Expiration Date
-                      </label>
-                      <input
-                        id="expiryDate"
-                        className="form-input"
-                        type="text"
-                        value={expiryDate}
-                        onChange={(e) => setExpiryDate(e.target.value)}
-                        placeholder="MM/YY"
-                        maxLength="5"
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="cvc" className="required">
-                        CVV
-                      </label>
-                      <input
-                        id="cvc"
-                        className="form-input"
-                        type="text"
-                        value={cvc}
-                        onChange={(e) => setCvc(e.target.value)}
-                        placeholder="123"
-                        maxLength="4"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label htmlFor="firstName" className="required">
-                        First Name
-                      </label>
-                      <input
-                        id="firstName"
-                        className="form-input"
-                        type="text"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        placeholder="First name"
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="lastName" className="required">
-                        Last Name
-                      </label>
-                      <input
-                        id="lastName"
-                        className="form-input"
-                        type="text"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        placeholder="Last name"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label htmlFor="country" className="required">
-                        Country
-                      </label>
-                      <Select
-                        options={countryOptions}
-                        value={country}
-                        onChange={(option) => setCountry(option)}
-                        placeholder="Select Country"
-                        className="country-select"
-                        classNamePrefix="select"
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="postalCode" className="required">
-                        Postal Code
-                      </label>
-                      <input
-                        id="postalCode"
-                        className="form-input"
-                        type="text"
-                        value={postalCode}
-                        onChange={(e) => setPostalCode(e.target.value)}
-                        placeholder="Enter postal code"
-                        required
-                      />
-                    </div>
-                  </div>
+                  <p>Total Amount: ${calculateTotalAmount().toFixed(2)}</p>
+                  <p>Upfront Payment (25%): ${calculateUpfrontAmount()}</p>
+                  <button
+                    type="submit"
+                    className="auth-button"
+                    disabled={isPostingJob}
+                  >
+                    {isPostingJob ? 'Processing...' : 'Pay 25% and Post Job'}
+                  </button>
                 </div>
-
-                <button type="submit" className="auth-button">
-                  Post Job
-                </button>
               </form>
             </div>
           )}
@@ -782,6 +723,7 @@ const ClientDashboard = () => {
                       <th>Pages</th>
                       <th>Deadline</th>
                       <th>Status</th>
+                      <th>Payment Status</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -793,6 +735,7 @@ const ClientDashboard = () => {
                         <td>{job.pages}</td>
                         <td>{new Date(job.deadline).toLocaleString()}</td>
                         <td>{job.status}</td>
+                        <td>{job.payment_status}</td>
                         <td>
                           <button
                             onClick={() => viewJobDetails(job.id)}
@@ -823,6 +766,7 @@ const ClientDashboard = () => {
                       <th>Pages</th>
                       <th>Deadline</th>
                       <th>Status</th>
+                      <th>Payment Status</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -834,6 +778,7 @@ const ClientDashboard = () => {
                         <td>{job.pages}</td>
                         <td>{new Date(job.deadline).toLocaleString()}</td>
                         <td>{job.status}</td>
+                        <td>{job.payment_status}</td>
                         <td>
                           <button
                             onClick={() => viewJobDetails(job.id)}
@@ -860,12 +805,11 @@ const ClientDashboard = () => {
                   <p><strong>Topic:</strong> {selectedJob.title}</p>
                   <p><strong>Subject:</strong> {selectedJob.subject}</p>
                   <p><strong>Number of Pages:</strong> {selectedJob.pages}</p>
-                  <p><strong>Spacing:</strong> {selectedJob.spacing}</p>
+                  <p><strong>Education Level:</strong> {selectedJob.writer_level}</p>
                   <p><strong>Deadline:</strong> {new Date(selectedJob.deadline).toLocaleString()}</p>
-                  <p><strong>Number of Cited Resources:</strong> {selectedJob.cited_resources}</p>
-                  <p><strong>Formatting Style:</strong> {selectedJob.formatting_style}</p>
-                  <p><strong>Writer Level:</strong> {selectedJob.writer_level}</p>
                   <p><strong>Status:</strong> {selectedJob.status}</p>
+                  <p><strong>Total Amount:</strong> ${selectedJob.total_amount?.toFixed(2) || calculateTotalAmount().toFixed(2)}</p>
+                  <p><strong>Payment Status:</strong> {selectedJob.payment_status || 'Pending'}</p>
                 </div>
                 <div className="instructions">
                   <p><strong>Instructions:</strong> {selectedJob.instructions}</p>
@@ -919,7 +863,7 @@ const ClientDashboard = () => {
                             </li>
                           ))}
                         </ul>
-                        <button 
+                        <button
                           onClick={sendAdditionalFiles}
                           disabled={isUploading || additionalFiles.length === 0}
                           className="upload-button"
@@ -950,10 +894,23 @@ const ClientDashboard = () => {
                         ))}
                       </ul>
                     </div>
+                    {selectedJob.payment_status === 'Partial' && (
+                      <button
+                        onClick={() => handleRemainingPayment(selectedJob.id)}
+                        className="auth-button"
+                      >
+                        Pay Remaining 75% (${(selectedJob.total_amount * 0.75).toFixed(2)})
+                      </button>
+                    )}
+                    {selectedJob.payment_status === 'Completed' && (
+                      <p className="payment-status">Payment Completed</p>
+                    )}
                   </div>
                 )}
               </div>
-              <button onClick={() => setCurrentTab('activeJobs')} className="action-button">Back to Jobs</button>
+              <button onClick={() => setCurrentTab('activeJobs')} className="action-button">
+                Back to Jobs
+              </button>
             </div>
           )}
         </div>
@@ -988,7 +945,9 @@ const ClientDashboard = () => {
                     </div>
                   ) : (
                     <>
-                      <p><strong>{msg.sender_role === 'client' ? 'You' : 'Admin'}:</strong> {msg.content}</p>
+                      <p>
+                        <strong>{msg.sender_role === 'client' ? 'You' : 'Admin'}:</strong> {msg.content}
+                      </p>
                       <small>{new Date(msg.created_at).toLocaleString()}</small>
                       {msg.sender_role === 'client' && (
                         <div className="message-actions">

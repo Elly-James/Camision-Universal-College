@@ -34,7 +34,7 @@ def send_job_message(job_id):
 
     try:
         token = token.split(' ')[1]
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         g.current_user = db.session.get(User, data['user_id'])
         if not g.current_user:
             return jsonify({'error': 'User not found'}), 404
@@ -146,7 +146,7 @@ def get_job_messages(job_id):
 
     try:
         token = token.split(' ')[1]
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         g.current_user = db.session.get(User, data['user_id'])
         if not g.current_user:
             return jsonify({'error': 'User not found'}), 404
@@ -202,7 +202,7 @@ def send_message():
 
     try:
         token = token.split(' ')[1]
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         g.current_user = db.session.get(User, data['user_id'])
         if not g.current_user:
             return jsonify({'error': 'User not found'}), 404
@@ -278,7 +278,7 @@ def edit_message(message_id):
 
     try:
         token = token.split(' ')[1]
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         g.current_user = db.session.get(User, data['user_id'])
         if not g.current_user:
             return jsonify({'error': 'User not found'}), 404
@@ -334,7 +334,7 @@ def delete_message(message_id):
 
     try:
         token = token.split(' ')[1]
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         user = db.session.get(User, data['user_id'])
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -393,7 +393,7 @@ def get_general_messages():
 
     try:
         token = token.split(' ')[1]
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         g.current_user = db.session.get(User, data['user_id'])
         if not g.current_user:
             return jsonify({'error': 'User not found'}), 404
@@ -441,7 +441,7 @@ def clear_chat_history():
 
     try:
         token = token.split(' ')[1]
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         user = db.session.get(User, data['user_id'])
         if not user:
             return jsonify({'error': 'User not found'}), 404

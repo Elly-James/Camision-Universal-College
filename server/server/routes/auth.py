@@ -18,15 +18,17 @@ logger = logging.getLogger(__name__)
 # Helper function to generate JWT tokens
 def generate_tokens(user):
     access_token = jwt.encode({
-        'user_id': user.id,
+        'sub': user.id,  # Added for flask-jwt-extended
+        'user_id': user.id,  # Kept for backward compatibility
         'role': user.role,
         'exp': datetime.utcnow() + timedelta(hours=24)
-    }, current_app.config['SECRET_KEY'], algorithm='HS256')
+    }, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
 
     refresh_token = jwt.encode({
-        'user_id': user.id,
+        'sub': user.id,  # Added for flask-jwt-extended
+        'user_id': user.id,  # Kept for backward compatibility
         'exp': datetime.utcnow() + timedelta(days=30)
-    }, current_app.config['SECRET_KEY'], algorithm='HS256')
+    }, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
 
     return access_token, refresh_token
 
@@ -132,7 +134,7 @@ def get_current_user():
 
     token = token.split(' ')[1]
     try:
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         user = db.session.get(User, data['user_id'])
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -305,7 +307,7 @@ def refresh():
 
     token = token.split(' ')[1]
     try:
-        data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         user = db.session.get(User, data['user_id'])
         if not user:
             return jsonify({'error': 'User not found'}), 404

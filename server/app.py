@@ -20,6 +20,7 @@ import time
 from threading import Thread
 from server.routes.auth import auth_bp
 from server.routes.jobs import jobs_bp
+from server.routes.payments import payments_bp
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -45,7 +46,7 @@ def create_app(config_name='development'):
     # Ensure upload folder is set
     app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'Uploads')
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 16MB max file size
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
     
     # Initialize extensions
     initialize_extensions(app)
@@ -70,6 +71,7 @@ def create_app(config_name='development'):
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(auth_bp, url_prefix='/auth', name='auth_legacy')  # Unique name for /auth prefix
     app.register_blueprint(jobs_bp, url_prefix='/api/jobs')
+    app.register_blueprint(payments_bp, url_prefix='/api/payments')
     
     # Start background cleanup tasks
     start_cleanup_tasks(app)
@@ -192,7 +194,7 @@ def send_message():
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
@@ -268,7 +270,7 @@ def edit_message(message_id):
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
@@ -317,7 +319,7 @@ def delete_message(message_id):
 
     token = token.split(' ')[1]
     try:
-        data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         user = db.session.get(User, data['user_id'])
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -369,7 +371,7 @@ def get_messages():
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
@@ -413,7 +415,7 @@ def send_job_message(job_id):
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
@@ -521,7 +523,7 @@ def get_job_messages(job_id):
     token = token.split(' ')[1]
     try:
         if not hasattr(g, 'current_user'):
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             g.current_user = db.session.get(User, data['user_id'])
             if not g.current_user:
                 return jsonify({'error': 'User not found'}), 404
@@ -572,7 +574,7 @@ def get_file(filename):
 
     try:
         token = token.split(' ')[1]
-        data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
         user = db.session.get(User, data['user_id'])
         if not user:
             logger.error(f"User not found for file download: {filename}")
@@ -652,7 +654,7 @@ def handle_job_connect(auth):
 
     with app.app_context():
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             user = db.session.get(User, data['user_id'])
             if not user:
                 logger.error("SocketIO /jobs connect: User not found")
@@ -674,7 +676,7 @@ def handle_message_connect(auth):
 
     with app.app_context():
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
             user = db.session.get(User, data['user_id'])
             if not user:
                 logger.error("SocketIO /messages connect: User not found")

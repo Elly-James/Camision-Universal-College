@@ -2,11 +2,10 @@ from extensions import db, bcrypt
 from datetime import datetime
 
 class User(db.Model):
-    """User model for storing user information."""
     __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    username = db.Column(db.String(80), unique=True, nullable=True, index=True)  # Changed to nullable=True as username is no longer required
+    username = db.Column(db.String(80), unique=True, nullable=True, index=True)
     name = db.Column(db.String(120), nullable=False)
     password_hash = db.Column(db.String(128))
     role = db.Column(db.String(50), default='client')
@@ -28,7 +27,7 @@ class User(db.Model):
         return {
             'id': self.id,
             'email': self.email,
-            'username': self.username,  # May be None if not set during registration
+            'username': self.username,
             'name': self.name,
             'role': self.role,
             'created_at': self.created_at.isoformat(),
@@ -36,7 +35,6 @@ class User(db.Model):
         }
 
 class Job(db.Model):
-    """Job model for storing job order details."""
     __tablename__ = 'job'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
@@ -52,12 +50,22 @@ class Job(db.Model):
     writer_level = db.Column(db.String(50), default='PHD')
     spacing = db.Column(db.String(50), default='double')
     total_amount = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(50), default='Pending', index=True)
+    payment_status = db.Column(db.String(50), default='Pending', index=True)
+    order_tracking_id = db.Column(db.String(36), nullable=True)
+    completion_tracking_id = db.Column(db.String(36), nullable=True)
+    merchant_reference = db.Column(db.String(100), nullable=True)
+    completion_reference = db.Column(db.String(100), nullable=True)
+    status = db.Column(db.String(50), default='Pending Payment', index=True)
     files = db.Column(db.JSON, default=list)
     completed_files = db.Column(db.JSON, default=list)
     completed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Updated constraint to match actual values used
+    __table_args__ = (
+        db.CheckConstraint('payment_status IN (\'Pending\', \'Partial\', \'Completed\')', name='check_payment_status'),
+    )
 
     def to_dict(self):
         return {
@@ -75,6 +83,11 @@ class Job(db.Model):
             'writer_level': self.writer_level,
             'spacing': self.spacing,
             'total_amount': self.total_amount,
+            'payment_status': self.payment_status,
+            'order_tracking_id': self.order_tracking_id,
+            'completion_tracking_id': self.completion_tracking_id,
+            'merchant_reference': self.merchant_reference,
+            'completion_reference': self.completion_reference,
             'status': self.status,
             'files': self.files,
             'completed_files': self.completed_files,
@@ -84,7 +97,6 @@ class Job(db.Model):
         }
 
 class ResetToken(db.Model):
-    """ResetToken model for storing password reset tokens."""
     __tablename__ = 'reset_token'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
@@ -102,7 +114,6 @@ class ResetToken(db.Model):
         }
 
 class Message(db.Model):
-    """Message model for storing communication between users."""
     __tablename__ = 'message'
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.Integer, db.ForeignKey('job.id'), nullable=True)
@@ -129,4 +140,21 @@ class Message(db.Model):
             'admin_deleted': self.admin_deleted,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
+        }
+
+class IPNRegistration(db.Model):
+    __tablename__ = 'ipn_registration'
+    id = db.Column(db.Integer, primary_key=True)
+    ipn_id = db.Column(db.String(36), unique=True, nullable=False, index=True)
+    url = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ipn_status = db.Column(db.String(50), default='Active')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ipn_id': self.ipn_id,
+            'url': self.url,
+            'created_at': self.created_at.isoformat(),
+            'ipn_status': self.ipn_status
         }

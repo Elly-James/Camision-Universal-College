@@ -23,36 +23,88 @@ const AdminDashboard = () => {
   const [currentTab, setCurrentTab] = useState('allJobs');
   const [isDownloading, setIsDownloading] = useState(false);
 
+  const fetchData = useCallback(async () => {
+    let attempts = 0;
+    const maxAttempts = 3;
+    while (attempts < maxAttempts) {
+      try {
+        const [userData, jobsData] = await Promise.all([
+          getCurrentUser(),
+          getJobs(),
+        ]);
+        setJobs(jobsData);
+        return;
+      } catch (error) {
+        attempts++;
+        if (attempts === maxAttempts) {
+          toast.error(error.message || 'Failed to load data');
+          if (error.message.includes('Token')) {
+            navigate('/auth');
+          }
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+      }
+    }
+  }, [navigate]);
+
   useEffect(() => {
     if (!user || role !== 'admin') {
       navigate('/auth');
-    } else {
-      fetchData();
+      return;
     }
+    fetchData();
 
     const socketJobs = getSocketJobs();
     const socketMessages = getSocketMessages();
 
     if (socketJobs) {
-      socketJobs.on('new_job', (job) => {
-        setJobs((prev) => [...prev, job]);
+      socketJobs.on('new_job', async (job) => {
+        setJobs((prev) => {
+          if (!prev.some(j => j.id === job.id)) {
+            return [...prev, job];
+          }
+          return prev;
+        });
         toast.success('New job posted');
       });
-      socketJobs.on('job_updated', (job) => {
+      socketJobs.on('job_updated', async (job) => {
         setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
         if (selectedJob && selectedJob.id === job.id) {
-          setSelectedJob({
-            ...job,
-            messages: job.messages || selectedJob.messages,
-            all_files: job.all_files || selectedJob.all_files
-          });
+          try {
+            const updatedJob = await getJob(job.id);
+            setSelectedJob({
+              ...updatedJob,
+              messages: updatedJob.messages || selectedJob.messages,
+              all_files: updatedJob.all_files || selectedJob.all_files,
+            });
+          } catch (error) {
+            console.error('Failed to refresh selected job:', error);
+            toast.error('Failed to refresh job details');
+          }
         }
         toast.success('Job updated');
+      });
+      socketJobs.on('payment_status_updated', async ({ job_id, payment_status }) => {
+        setJobs((prev) => prev.map((j) => j.id === job_id ? { ...j, payment_status } : j));
+        if (selectedJob && selectedJob.id === job_id) {
+          try {
+            const updatedJob = await getJob(job_id);
+            setSelectedJob({
+              ...updatedJob,
+              messages: updatedJob.messages || selectedJob.messages,
+              all_files: updatedJob.all_files || selectedJob.all_files,
+            });
+          } catch (error) {
+            console.error('Failed to refresh job after payment update:', error);
+            toast.error('Failed to refresh job data');
+          }
+        }
+        toast.success(`Job ${job_id} payment status updated to ${payment_status}`);
       });
     }
 
     if (socketMessages) {
-      socketMessages.on('new_general_message', (message) => {
+      socketMessages.on('new_general_message', async (message) => {
         if (selectedJob && message.client_id === selectedJob.user_id && message.sender_role !== 'admin') {
           setSelectedJob((prev) => ({
             ...prev,
@@ -62,7 +114,7 @@ const AdminDashboard = () => {
           toast.success('New message received from client');
         }
       });
-      socketMessages.on('message_updated', (message) => {
+      socketMessages.on('message_updated', async (message) => {
         if (selectedJob && selectedJob.messages?.some((m) => m.id === message.id)) {
           setSelectedJob((prev) => ({
             ...prev,
@@ -71,7 +123,7 @@ const AdminDashboard = () => {
           toast.success('Message updated');
         }
       });
-      socketMessages.on('message_deleted', ({ message_id, client_id }) => {
+      socketMessages.on('message_deleted', async ({ message_id, client_id }) => {
         if (selectedJob && selectedJob.user_id === client_id) {
           setSelectedJob((prev) => ({
             ...prev,
@@ -86,6 +138,7 @@ const AdminDashboard = () => {
       if (socketJobs) {
         socketJobs.off('new_job');
         socketJobs.off('job_updated');
+        socketJobs.off('payment_status_updated');
       }
       if (socketMessages) {
         socketMessages.off('new_general_message');
@@ -93,22 +146,7 @@ const AdminDashboard = () => {
         socketMessages.off('message_deleted');
       }
     };
-  }, [user, role, navigate, selectedJob]);
-
-  const fetchData = async () => {
-    try {
-      const [userData, jobsData] = await Promise.all([
-        getCurrentUser(),
-        getJobs(),
-      ]);
-      setJobs(jobsData);
-    } catch (error) {
-      toast.error(error.message || 'Failed to load data');
-      if (error.message.includes('Token')) {
-        navigate('/auth');
-      }
-    }
-  };
+  }, [user, role, navigate, selectedJob, fetchData]);
 
   const viewJobDetails = async (jobId) => {
     try {
@@ -179,7 +217,10 @@ const AdminDashboard = () => {
           <div className="dashboard-tabs">
             <button
               className={currentTab === 'allJobs' ? 'tab-active' : ''}
-              onClick={() => setCurrentTab('allJobs')}
+              onClick={() => {
+                setCurrentTab('allJobs');
+                fetchData();
+              }}
             >
               All Jobs
             </button>
@@ -205,6 +246,7 @@ const AdminDashboard = () => {
                       <th>Pages</th>
                       <th>Deadline</th>
                       <th>Status</th>
+                      <th>Payment Status</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -217,6 +259,7 @@ const AdminDashboard = () => {
                         <td>{job.pages}</td>
                         <td>{new Date(job.deadline).toLocaleString()}</td>
                         <td>{job.status}</td>
+                        <td>{job.payment_status}</td>
                         <td>
                           <button
                             onClick={() => viewJobDetails(job.id)}
@@ -238,7 +281,10 @@ const AdminDashboard = () => {
           {currentTab === 'jobDetails' && selectedJob && (
             <AdminJobDetails
               job={selectedJob}
-              onBack={() => setCurrentTab('allJobs')}
+              onBack={() => {
+                setCurrentTab('allJobs');
+                fetchData();
+              }}
               onUpdate={fetchData}
               downloadFile={downloadFile}
               generateFilePreview={generateFilePreview}

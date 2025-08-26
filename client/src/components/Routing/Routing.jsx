@@ -7,6 +7,7 @@ import ClientDashboard from '../ClientDashboard/ClientDashboard.jsx';
 import AdminDashboard from '../AdminDashboard/AdminDashboard.jsx';
 import ForgotPassword from '../Auth/ForgotPassword.jsx';
 import ResetPassword from '../Auth/ResetPassword.jsx';
+import PaymentCallback from '../PaymentCallback/PaymentCallback.jsx'; // Import PaymentCallback
 import { AuthContext } from '../context/AuthContext.jsx';
 
 const Routing = () => {
@@ -52,6 +53,18 @@ const Routing = () => {
         element={
           user && role === 'admin' ? (
             <AdminDashboard />
+          ) : user ? (
+            <Navigate to={`/${role}-dashboard`} />
+          ) : (
+            <Navigate to="/auth" />
+          )
+        }
+      />
+      <Route
+        path="/payment-callback"
+        element={
+          user && role === 'client' ? (
+            <PaymentCallback />
           ) : user ? (
             <Navigate to={`/${role}-dashboard`} />
           ) : (
