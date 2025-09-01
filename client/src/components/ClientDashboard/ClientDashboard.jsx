@@ -1,3 +1,5 @@
+// ClientDashboard.jsx (updated)
+
 import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
@@ -18,6 +20,7 @@ import {
   getSocketJobs,
   getSocketMessages,
   getFile,
+  getFileBlob,
   initiatePayment,
   getPaymentStatus,
 } from '../../utils/api.js';
@@ -29,6 +32,7 @@ const ClientDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, role, token } = useContext(AuthContext);
+  const [isLoading, setIsLoading] = useState(true); // New: Track loading state
 
   // Form states
   const [subject, setSubject] = useState('');
@@ -44,6 +48,7 @@ const ClientDashboard = () => {
   const [phoneNumber, setPhoneNumber] = useState(user?.phone || '+254712345678');
   const [countryCode, setCountryCode] = useState('KE');
   const [isPostingJob, setIsPostingJob] = useState(false);
+  const [isPayingRemaining, setIsPayingRemaining] = useState(false);
 
   // Dashboard states
   const [activeJobs, setActiveJobs] = useState([]);
@@ -61,22 +66,99 @@ const ClientDashboard = () => {
     return stored ? JSON.parse(stored) : [];
   });
   const [additionalFiles, setAdditionalFiles] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState({});
 
   const countryOptions = useMemo(() => countryList().getData(), []);
 
+  // Updated: Initialize sockets once
+  const socketJobs = useMemo(() => getSocketJobs(), []);
+  const socketMessages = useMemo(() => getSocketMessages(), []);
+
+  // Fetch previews for selected job
   useEffect(() => {
-    if (!user || role !== 'client') {
-      navigate('/auth');
-    } else {
-      fetchData();
+    const fetchPreviews = async () => {
+      const newPreviews = {};
+      const allFiles = [
+        ...(selectedJob?.files || []),
+        ...(selectedJob?.completed_files || []),
+        ...(selectedJob?.all_files || []),
+      ].filter(Boolean);
+
+      for (const file of allFiles) {
+        const ext = (typeof file === 'string' ? file.split('.').pop() : file.name.split('.').pop()).toLowerCase();
+        if (['jpg', 'jpeg', 'png'].includes(ext)) {
+          try {
+            const blob = await getFileBlob(file);
+            newPreviews[file] = URL.createObjectURL(blob);
+          } catch (e) {
+            console.error(`Failed to fetch preview for ${file}:`, e);
+          }
+        }
+      }
+      setPreviewUrls(newPreviews);
+    };
+
+    if (selectedJob) {
+      fetchPreviews();
     }
 
-    const socketJobs = getSocketJobs();
-    const socketMessages = getSocketMessages();
+    return () => {
+      Object.values(previewUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [selectedJob]);
 
+  // Updated: Load pending form data from localStorage on mount if newOrder tab
+  useEffect(() => {
+    if (currentTab === 'newOrder') {
+      const pendingForm = localStorage.getItem('pendingJobForm');
+      if (pendingForm) {
+        const formData = JSON.parse(pendingForm);
+        setSubject(formData.subject || '');
+        setTitle(formData.title || '');
+        setPages(formData.pages || 1);
+        setDeadline(formData.deadline ? new Date(formData.deadline) : new Date());
+        setInstructions(formData.instructions || '');
+        setWriterLevel(formData.writerLevel || 'highschool');
+        setFormattingStyle(formData.formattingStyle || 'APA');
+        setSpacing(formData.spacing || 'double');
+        setCitedResources(formData.citedResources || 0);
+        setPhoneNumber(formData.phoneNumber || user?.phone || '+254712345678');
+        setCountryCode(formData.countryCode || 'KE');
+        toast.info('Restored previous form data due to payment issue.');
+      }
+    }
+  }, [currentTab, user]);
+
+  // Updated: Auth check with loading state
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        // Fetch user data to ensure AuthContext is populated
+        await getCurrentUser();
+        setIsLoading(false); // Mark loading complete
+      } catch (error) {
+        console.error('Auth check error:', error);
+        setIsLoading(false);
+        navigate('/auth');
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  // Updated: Main data fetching and socket setup
+  useEffect(() => {
+    if (!isLoading && user && role === 'client') {
+      fetchData();
+    } else if (!isLoading && (!user || role !== 'client')) {
+      console.log('Redirecting to /auth: user=', user, 'role=', role);
+      navigate('/auth');
+    }
+
+    // Socket event listeners
     if (socketJobs) {
       socketJobs.on('new_job', (job) => {
-        if (job.user_id === user.id) {
+        if (job.user_id === user?.id) {
           setActiveJobs((prev) => [...prev, job]);
           toast.success('New job posted');
         }
@@ -93,7 +175,7 @@ const ClientDashboard = () => {
 
     if (socketMessages) {
       socketMessages.on('new_general_message', (message) => {
-        if (!hiddenMessageIds.includes(message.id) && message.client_id === user.id) {
+        if (!hiddenMessageIds.includes(message.id) && message.client_id === user?.id) {
           setChatMessages((prev) => [...prev, message]);
           if (selectedJob) {
             setSelectedJob((prev) => ({
@@ -105,7 +187,7 @@ const ClientDashboard = () => {
         }
       });
       socketMessages.on('message_updated', (message) => {
-        if (!hiddenMessageIds.includes(message.id) && message.client_id === user.id) {
+        if (!hiddenMessageIds.includes(message.id) && message.client_id === user?.id) {
           setChatMessages((prev) => prev.map((m) => (m.id === message.id ? message : m)));
           if (selectedJob) {
             setSelectedJob((prev) => ({
@@ -117,7 +199,7 @@ const ClientDashboard = () => {
         }
       });
       socketMessages.on('message_deleted', ({ message_id, client_id }) => {
-        if (client_id === user.id) {
+        if (client_id === user?.id) {
           setChatMessages((prev) => prev.filter((m) => m.id !== message_id));
           setHiddenMessageIds((prev) => {
             const updated = [...prev, message_id];
@@ -135,6 +217,7 @@ const ClientDashboard = () => {
       });
     }
 
+    // Cleanup sockets on unmount
     return () => {
       if (socketJobs) {
         socketJobs.off('new_job');
@@ -146,8 +229,9 @@ const ClientDashboard = () => {
         socketMessages.off('message_deleted');
       }
     };
-  }, [user, role, navigate, selectedJob, hiddenMessageIds]);
+  }, [isLoading, user, role, navigate, selectedJob, hiddenMessageIds, socketJobs, socketMessages]);
 
+  // Payment callback handling
   useEffect(() => {
     const orderTrackingId = searchParams.get('OrderTrackingId');
     const jobId = searchParams.get('job_id');
@@ -159,6 +243,7 @@ const ClientDashboard = () => {
           const status = await getPaymentStatus(orderTrackingId);
           if (status.payment_status === 'Completed') {
             toast.success(`${paymentType === 'completion' ? 'Remaining' : 'Upfront'} payment completed!`);
+            localStorage.removeItem('pendingJobForm');
             await fetchData();
             navigate('/client-dashboard?tab=activeJobs');
           } else if (status.payment_status === 'Failed' || status.payment_status === 'Invalid') {
@@ -187,6 +272,7 @@ const ClientDashboard = () => {
       setCompletedJobs(jobsData.filter((job) => job.status === 'Completed'));
       setChatMessages(messagesData.filter((msg) => !hiddenMessageIds.includes(msg.id)));
     } catch (error) {
+      console.error('Fetch data error:', error);
       toast.error(error.error || 'Failed to load data');
       if (error.error?.includes('Token')) {
         navigate('/auth');
@@ -209,24 +295,39 @@ const ClientDashboard = () => {
       return;
     }
 
+    const formData = {
+      subject,
+      title,
+      pages,
+      deadline: deadline.toISOString(),
+      instructions,
+      writerLevel,
+      formattingStyle,
+      spacing,
+      citedResources,
+      phoneNumber,
+      countryCode,
+    };
+    localStorage.setItem('pendingJobForm', JSON.stringify(formData));
+
     setIsPostingJob(true);
     try {
-      const formData = new FormData();
-      formData.append('subject', subject);
-      formData.append('title', title);
-      formData.append('pages', pages.toString());
-      formData.append('deadline', deadline.toISOString());
-      formData.append('instructions', instructions);
-      formData.append('writerLevel', writerLevel);
-      formData.append('formattingStyle', formattingStyle);
-      formData.append('spacing', spacing);
-      formData.append('citedResources', citedResources.toString());
-      formData.append('totalAmount', calculateTotalAmount().toString());
-      formData.append('phone_number', phoneNumber);
-      formData.append('country_code', countryCode);
-      files.forEach((file) => formData.append('files', file));
+      const formDataPayload = new FormData();
+      formDataPayload.append('subject', subject);
+      formDataPayload.append('title', title);
+      formDataPayload.append('pages', pages.toString());
+      formDataPayload.append('deadline', deadline.toISOString());
+      formDataPayload.append('instructions', instructions);
+      formDataPayload.append('writerLevel', writerLevel);
+      formDataPayload.append('formattingStyle', formattingStyle);
+      formDataPayload.append('spacing', spacing);
+      formDataPayload.append('citedResources', citedResources.toString());
+      formDataPayload.append('totalAmount', calculateTotalAmount().toString());
+      formDataPayload.append('phone_number', phoneNumber);
+      formDataPayload.append('country_code', countryCode);
+      files.forEach((file) => formDataPayload.append('files', file));
 
-      const response = await createJob(formData);
+      const response = await createJob(formDataPayload);
       if (response.redirect_url) {
         window.location.href = response.redirect_url;
       } else {
@@ -247,6 +348,7 @@ const ClientDashboard = () => {
   };
 
   const handleRemainingPayment = async (jobId) => {
+    setIsPayingRemaining(true);
     try {
       const response = await initiatePayment({ job_id: jobId, payment_type: 'completion', phone_number: phoneNumber, country_code: countryCode });
       if (response.redirect_url) {
@@ -265,6 +367,8 @@ const ClientDashboard = () => {
         errorMessage = 'Job not eligible for payment or already paid.';
       }
       toast.error(errorMessage);
+    } finally {
+      setIsPayingRemaining(false);
     }
   };
 
@@ -353,8 +457,11 @@ const ClientDashboard = () => {
       const clientMessages = chatMessages.filter((msg) => msg.sender_role === 'client');
       await Promise.all(clientMessages.map((msg) => deleteMessage(msg.id)));
       const allMessageIds = chatMessages.map((msg) => msg.id);
-      setHiddenMessageIds(allMessageIds);
-      localStorage.setItem('hiddenMessageIds', JSON.stringify(allMessageIds));
+      setHiddenMessageIds((prev) => {
+        const updated = [...prev, ...allMessageIds];
+        localStorage.setItem('hiddenMessageIds', JSON.stringify(updated));
+        return updated;
+      });
       setChatMessages([]);
       if (selectedJob) {
         setSelectedJob((prev) => ({
@@ -401,7 +508,7 @@ const ClientDashboard = () => {
         localStorage.setItem('hiddenMessageIds', JSON.stringify(updated));
         return updated;
       });
-      setChatMessages((prev) => prev.filter((msg) => m.id !== messageId));
+      setChatMessages((prev) => prev.filter((msg) => msg.id !== messageId));
       if (selectedJob) {
         setSelectedJob((prev) => ({
           ...prev,
@@ -434,11 +541,21 @@ const ClientDashboard = () => {
     const fileExtension = file.name?.split('.').pop().toLowerCase() || file.split('.').pop().toLowerCase();
 
     if (fileType === 'image' || ['png', 'jpg', 'jpeg'].includes(fileExtension)) {
-      return file instanceof File ? (
-        <img src={URL.createObjectURL(file)} alt={file.name} className="file-preview" />
-      ) : (
-        <img src={`/Uploads/${file}`} alt={file} className="file-preview" />
-      );
+      if (file instanceof File) {
+        return <img src={URL.createObjectURL(file)} alt={file.name} className="file-preview" />;
+      } else {
+        const previewUrl = previewUrls[file];
+        if (previewUrl) {
+          return <img src={previewUrl} alt={file.split('/').pop()} className="file-preview" />;
+        } else {
+          return (
+            <div className="file-preview-icon">
+              <span className="file-icon">🖼️</span>
+              <span className="file-type">Image</span>
+            </div>
+          );
+        }
+      }
     } else if (fileExtension === 'pdf') {
       return (
         <div className="file-preview-icon">
@@ -461,6 +578,11 @@ const ClientDashboard = () => {
       </div>
     );
   };
+
+  // New: Render loading state while checking auth
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <>
@@ -898,8 +1020,9 @@ const ClientDashboard = () => {
                       <button
                         onClick={() => handleRemainingPayment(selectedJob.id)}
                         className="auth-button"
+                        disabled={isPayingRemaining}
                       >
-                        Pay Remaining 75% (${(selectedJob.total_amount * 0.75).toFixed(2)})
+                        {isPayingRemaining ? 'Processing...' : `Pay Remaining 75% ($${ (selectedJob.total_amount * 0.75).toFixed(2) })`}
                       </button>
                     )}
                     {selectedJob.payment_status === 'Completed' && (

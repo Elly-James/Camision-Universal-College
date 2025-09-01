@@ -1,3 +1,5 @@
+// AdminJobDetails.jsx (updated)
+
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext.jsx';
 import {
@@ -10,6 +12,7 @@ import {
   getJob,
   getMessages,
   getPaymentStatus,
+  getFileBlob,
 } from '../../utils/api.js';
 import toast from 'react-hot-toast';
 import './AdminJobDetails.css';
@@ -28,11 +31,43 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
     const stored = localStorage.getItem('adminHiddenMessageIds');
     return stored ? JSON.parse(stored) : [];
   });
+  const [previewUrls, setPreviewUrls] = useState({});
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [localJob.messages]);
+
+  // Fetch previews
+  useEffect(() => {
+    const fetchPreviews = async () => {
+      const newPreviews = {};
+      const allFiles = [
+        ...(localJob?.files || []),
+        ...(localJob?.completed_files || []),
+        ...(localJob?.all_files || []),
+      ].filter(Boolean);
+
+      for (const file of allFiles) {
+        const ext = (typeof file === 'string' ? file.split('.').pop() : file.name.split('.').pop()).toLowerCase();
+        if (['jpg', 'jpeg', 'png'].includes(ext)) {
+          try {
+            const blob = await getFileBlob(file);
+            newPreviews[file] = URL.createObjectURL(blob);
+          } catch (e) {
+            console.error(`Failed to fetch preview for ${file}:`, e);
+          }
+        }
+      }
+      setPreviewUrls(newPreviews);
+    };
+
+    fetchPreviews();
+
+    return () => {
+      Object.values(previewUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [localJob]);
 
   useEffect(() => {
     setLocalJob({
@@ -65,12 +100,12 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       socketJobs.on('payment_status_updated', async ({ job_id, payment_status, order_tracking_id }) => {
         if (job_id === localJob.id) {
           try {
-            const response = await getJob(localJob.id);
+            const updatedJob = await getJob(localJob.id);
             setLocalJob({
-              ...response,
-              messages: response.messages.filter((msg) => !hiddenMessageIds.includes(msg.id)),
-              completed_files: response.completed_files || [],
-              all_files: response.all_files || [],
+              ...updatedJob,
+              messages: updatedJob.messages.filter((msg) => !hiddenMessageIds.includes(msg.id)),
+              completed_files: updatedJob.completed_files || [],
+              all_files: updatedJob.all_files || [],
             });
             onUpdate();
             toast.success(`Payment status updated to ${payment_status}`);
@@ -336,6 +371,49 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
     setCompletedFiles(completedFiles.filter((file) => file.name !== fileName));
   };
 
+  const localGenerateFilePreview = (file) => {
+    const fileType = file.type?.split('/')[0] || file.split('.').pop().toLowerCase();
+    const fileExtension = file.name?.split('.').pop().toLowerCase() || file.split('.').pop().toLowerCase();
+
+    if (fileType === 'image' || ['png', 'jpg', 'jpeg'].includes(fileExtension)) {
+      if (file instanceof File) {
+        return <img src={URL.createObjectURL(file)} alt={file.name} className="file-preview" />;
+      } else {
+        const previewUrl = previewUrls[file];
+        if (previewUrl) {
+          return <img src={previewUrl} alt={file.split('/').pop()} className="file-preview" />;
+        } else {
+          return (
+            <div className="file-preview-icon">
+              <span className="file-icon">🖼️</span>
+              <span className="file-type">Image</span>
+            </div>
+          );
+        }
+      }
+    } else if (fileExtension === 'pdf') {
+      return (
+        <div className="file-preview-icon">
+          <span className="file-icon">📄</span>
+          <span className="file-type">PDF</span>
+        </div>
+      );
+    } else if (fileExtension === 'docx' || fileExtension === 'doc') {
+      return (
+        <div className="file-preview-icon">
+          <span className="file-icon">📝</span>
+          <span className="file-type">DOCX</span>
+        </div>
+      );
+    }
+    return (
+      <div className="file-preview-icon">
+        <span className="file-icon">📁</span>
+        <span className="file-type">File</span>
+      </div>
+    );
+  };
+
   return (
     <div className="job-details">
       <div className="job-details-header">
@@ -407,7 +485,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
               <ul>
                 {localJob.files.map((file, index) => (
                   <li key={index} className="uploaded-file-item">
-                    <div className="file-preview-container">{generateFilePreview(file)}</div>
+                    <div className="file-preview-container">{localGenerateFilePreview(file)}</div>
                     <span>{file.split('/').pop()}</span>
                     <button
                       onClick={() => downloadFile(file)}
@@ -432,7 +510,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
                   .filter((file) => file.includes('additional-'))
                   .map((file, index) => (
                     <li key={index} className="uploaded-file-item">
-                      <div className="file-preview-container">{generateFilePreview(file)}</div>
+                      <div className="file-preview-container">{localGenerateFilePreview(file)}</div>
                       <span>{file.split('/').pop()}</span>
                       <button
                         onClick={() => downloadFile(file)}
@@ -459,7 +537,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
                   .filter((file) => !file.includes('completed-') && !file.includes('additional-'))
                   .map((file, index) => (
                     <li key={index} className="uploaded-file-item">
-                      <div className="file-preview-container">{generateFilePreview(file)}</div>
+                      <div className="file-preview-container">{localGenerateFilePreview(file)}</div>
                       <span>{file.split('/').pop()}</span>
                       <button
                         onClick={() => downloadFile(file)}
@@ -568,7 +646,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
                 <ul>
                   {completedFiles.map((file, index) => (
                     <li key={index} className="uploaded-file-item">
-                      <div className="file-preview-container">{generateFilePreview(file)}</div>
+                      <div className="file-preview-container">{localGenerateFilePreview(file)}</div>
                       <span>{file.name}</span>
                       <button
                         type="button"
@@ -599,7 +677,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
               <ul>
                 {localJob.completed_files.map((file, index) => (
                   <li key={index} className="uploaded-file-item">
-                    <div className="file-preview-container">{generateFilePreview(file)}</div>
+                    <div className="file-preview-container">{localGenerateFilePreview(file)}</div>
                     <span>{file.split('/').pop()}</span>
                     <button
                       onClick={() => downloadFile(file)}

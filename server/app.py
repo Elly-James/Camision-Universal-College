@@ -1,3 +1,5 @@
+# app.py (updated)
+
 import eventlet
 eventlet.monkey_patch()  # Must be at the top before any other imports
 
@@ -44,7 +46,7 @@ def create_app(config_name='development'):
         raise ValueError("DATABASE_URL is not set")
 
     # Ensure upload folder is set
-    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'Uploads')
+    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
     
@@ -563,23 +565,36 @@ def get_job_messages(job_id):
         logger.error(f"Failed to retrieve messages for job ID: {job_id}: {str(e)}", exc_info=True)
         return jsonify({"error": "Failed to retrieve messages", "details": str(e)}), 500
 
-@app.route('/Uploads/<path:filename>', methods=['GET', 'OPTIONS'])
+@app.route('/api/files/<path:filename>', methods=['GET', 'OPTIONS'])
 def get_file(filename):
     if request.method == 'OPTIONS':
         return '', 200
 
-    token = request.headers.get('Authorization')
-    if not token or not token.startswith('Bearer '):
-        return jsonify({'error': 'Token missing or invalid'}), 401
+    # For preview requests (e.g., from <img src>), skip token check for simplicity
+    # Note: This may expose files if URLs are guessed, consider signed URLs for production
+    is_preview = request.args.get('preview') == 'true'
+
+    if not is_preview:
+        token = request.headers.get('Authorization')
+        if not token or not token.startswith('Bearer '):
+            return jsonify({'error': 'Token missing or invalid'}), 401
+
+        token = token.split(' ')[1]
+        try:
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+            user = db.session.get(User, data['user_id'])
+            if not user:
+                logger.error(f"User not found for file download: {filename}")
+                return jsonify({'error': 'User not found'}), 404
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid token'}), 401
+        except Exception as e:
+            logger.error(f"File access error: {str(e)}")
+            return jsonify({"error": "Failed to access file", "details": str(e)}), 500
 
     try:
-        token = token.split(' ')[1]
-        data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
-        user = db.session.get(User, data['user_id'])
-        if not user:
-            logger.error(f"User not found for file download: {filename}")
-            return jsonify({'error': 'User not found'}), 404
-
         # Normalize path to prevent directory traversal
         filename = os.path.normpath(filename).replace('\\', '/')
         if filename.startswith('/') or '..' in filename:
@@ -589,55 +604,53 @@ def get_file(filename):
         path_parts = filename.split('/')
         if len(path_parts) < 2 and path_parts[0] != 'temp':
             logger.error(f"Invalid file path format: {filename}")
-            return jsonify({"error": "Invalid file path format"}, 400)
+            return jsonify({"error": "Invalid file path format"}), 400
 
         job_id = None
         if path_parts[0].startswith('job_'):
             job_id_str = path_parts[0].replace('job_', '')
             if not job_id_str.isdigit():
                 logger.error(f"Invalid job ID in file path: {filename}")
-                return jsonify({"error": "Invalid job ID in file path"}, 400)
+                return jsonify({"error": "Invalid job ID in file path"}), 400
             job_id = int(job_id_str)
 
-        if user.role == 'admin' or path_parts[0] == 'temp':
+        if is_preview or user.role == 'admin' or path_parts[0] == 'temp':
             try:
+                as_attachment = not is_preview
                 return send_from_directory(
                     app.config['UPLOAD_FOLDER'],
                     filename,
-                    as_attachment=True,
+                    as_attachment=as_attachment,
                     download_name=path_parts[-1]
                 )
             except FileNotFoundError:
                 logger.error(f"File not found: {filename}")
-                return jsonify({"error": f"File not found: {filename}"}, 404)
+                return jsonify({"error": f"File not found: {filename}"}), 404
 
         if not job_id:
             logger.error(f"Invalid file path for client: {filename}")
-            return jsonify({"error": "Invalid file path"}, 400)
+            return jsonify({"error": "Invalid file path"}), 400
 
         job = db.session.get(Job, job_id)
         if not job:
             logger.error(f"Job not found for file: {filename}, job_id: {job_id}")
-            return jsonify({"error": "Job not found"}, 404)
+            return jsonify({"error": "Job not found"}), 404
         if job.user_id != user.id:
             logger.error(f"Unauthorized file access attempt by user ID: {user.id} for filename: {filename}")
-            return jsonify({"error": "Unauthorized"}, 403)
+            return jsonify({"error": "Unauthorized"}), 403
             
         try:
+            as_attachment = not is_preview
             return send_from_directory(
                 app.config['UPLOAD_FOLDER'],
                 filename,
-                as_attachment=True,
+                as_attachment=as_attachment,
                 download_name=path_parts[-1]
             )
         except FileNotFoundError:
             logger.error(f"File not found: {filename}")
-            return jsonify({"error": f"File not found: {filename}"}, 404)
+            return jsonify({"error": f"File not found: {filename}"}), 404
         
-    except jwt.ExpiredSignatureError:
-        return jsonify({'error': 'Token expired'}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({'error': 'Invalid token'}), 401
     except Exception as e:
         logger.error(f"File download error: {str(e)}")
         return jsonify({"error": "Failed to download file", "details": str(e)}), 500

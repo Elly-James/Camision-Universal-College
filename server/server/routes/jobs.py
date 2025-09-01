@@ -119,22 +119,31 @@ def create_job():
                 'writerLevel': data.get('writerLevel', 'PHD'),
                 'spacing': data.get('spacing', 'double'),
                 'totalAmount': total_amount,
-                # Files handled in payments.py
             }
             
             # Send files with payment request
             files_data = [('files', (file.filename, file, file.mimetype)) for file in files if file and allowed_file(file.filename)]
+            
+            # Use the correct URL format for the payment initiation
+            payment_url = f"{request.scheme}://{request.host}/api/payments/initiate-upfront"
+            logger.info(f"Sending payment request to: {payment_url}")
+            
             payment_response = requests.post(
-                f"{request.host_url}api/payments/initiate-upfront",
+                payment_url,
                 data=payment_data,
                 files=files_data,
-                headers={'Authorization': f'Bearer {token}'}
+                headers={'Authorization': f'Bearer {token}'},
+                timeout=30
             )
+            
             if payment_response.status_code != 200:
-                return jsonify({'error': 'Payment initiation failed', 'details': payment_response.json()}), 400
+                error_msg = payment_response.json().get('error', 'Payment initiation failed')
+                logger.error(f"Payment initiation failed: {error_msg}")
+                return jsonify({'error': 'Payment initiation failed', 'details': error_msg}), 400
 
             payment_response_data = payment_response.json()
             logger.info(f"Job creation initiated with payment, redirect to: {payment_response_data['redirect_url']}")
+            
             return jsonify({
                 'message': 'Job creation initiated, redirect to Pesapal for payment',
                 'job_id': payment_response_data.get('job_id'),
@@ -142,6 +151,12 @@ def create_job():
                 'order_tracking_id': payment_response_data.get('order_tracking_id')
             }), 200
 
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Network error during payment initiation: {str(e)}")
+            return jsonify({
+                "error": "Network error during payment initiation",
+                "details": str(e)
+            }), 500
         except Exception as e:
             logger.error(f"Job creation failed: {str(e)}", exc_info=True)
             return jsonify({
@@ -173,9 +188,11 @@ def get_jobs():
 
         user = g.current_user
         if user.role == 'admin':
+            # Admin sees all jobs except those with Pending payment status
             jobs = Job.query.filter(Job.payment_status != 'Pending').all()
         else:
-            jobs = Job.query.filter_by(user_id=user.id).all()
+            # Client sees only their jobs that are not Pending payment status
+            jobs = Job.query.filter(and_(Job.user_id == user.id, Job.payment_status != 'Pending')).all()
 
         logger.info(f"Jobs retrieved for user ID: {user.id}, count: {len(jobs)}")
         return jsonify([{
@@ -210,6 +227,11 @@ def get_job(job_id):
         job = db.session.get(Job, job_id)
         if not job:
             return jsonify({"error": "Job not found"}), 404
+
+        # Check if job payment is still pending and user is not admin
+        if job.payment_status == 'Pending' and user.role != 'admin':
+            logger.error(f"Unauthorized access to pending job ID: {job_id} by user ID: {user.id}")
+            return jsonify({"error": "Job payment pending. Please complete payment first."}), 403
 
         if user.role != 'admin' and job.user_id != user.id:
             logger.error(f"Unauthorized job access attempt by user ID: {user.id} for job ID: {job_id}")
@@ -284,19 +306,6 @@ def update_job(job_id):
         data = request.get_json()
         if 'status' in data:
             job.status = data['status']
-            if data['status'] == 'Completed' and job.payment_status == 'Partial':
-                payment_data = {
-                    'job_id': job.id,
-                    'phone_number': '',
-                    'country_code': 'KE'
-                }
-                payment_response = requests.post(
-                    f"{request.host_url}api/payments/initiate-completion",
-                    json=payment_data,
-                    headers={'Authorization': f'Bearer {token}'}
-                )
-                if payment_response.status_code != 200:
-                    return jsonify({'error': 'Completion payment initiation failed', 'details': payment_response.json()}), 400
             if data['status'] == 'Completed':
                 job.completed = True
             db.session.commit()
@@ -308,3 +317,44 @@ def update_job(job_id):
         return jsonify({'error': 'Token expired'}), 401
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Invalid token'}), 401
+
+@jobs_bp.route('/payment-status/<int:job_id>', methods=['GET', 'OPTIONS'])
+def check_job_payment_status(job_id):
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        if not hasattr(g, 'current_user'):
+            data = jwt.decode(token, current_app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+            g.current_user = db.session.get(User, data['user_id'])
+            if not g.current_user:
+                return jsonify({'error': 'User not found'}), 404
+
+        user = g.current_user
+        job = db.session.get(Job, job_id)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+
+        if user.role != 'admin' and job.user_id != user.id:
+            logger.error(f"Unauthorized payment status check by user ID: {user.id} for job ID: {job_id}")
+            return jsonify({"error": "Unauthorized"}), 403
+
+        return jsonify({
+            'job_id': job.id,
+            'payment_status': job.payment_status,
+            'order_tracking_id': job.order_tracking_id,
+            'completion_tracking_id': job.completion_tracking_id
+        }), 200
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+    except Exception as e:
+        logger.error(f"Failed to check payment status for job {job_id}: {str(e)}")
+        return jsonify({"error": "Failed to check payment status", "details": str(e)}), 500

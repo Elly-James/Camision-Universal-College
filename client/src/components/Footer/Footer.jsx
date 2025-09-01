@@ -177,45 +177,45 @@ const Footer = () => {
                 <div className="services-column">
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/admission-essay-writing-service">Admission Essay Writing Service</a>
+                    <a href="/admission-essay-writing-service">Admission Essay Writing Services</a>
                   </li>
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/analytical-essay-writing-service">Analytical Essay Writing Service</a>
+                    <a href="/analytical-essay-writing-service">Analytical Essay Writing Services</a>
                   </li>
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/apa-paper-writing-service">APA Paper Writing Service</a>
+                    <a href="/apa-paper-writing-service">APA Paper Writing Services</a>
                   </li>
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/argumentative-essay-writing-service">Argumentative Essay Writing Service</a>
+                    <a href="/argumentative-essay-writing-service">Argumentative Essay Writing Services</a>
                   </li>
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/book-report-writing-service">Book Report Writing Service</a>
+                    <a href="/book-report-writing-service">Book Report Writing Services</a>
                   </li>
                 </div>
                 <div className="services-column">
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/buy-argumentative-essay">Buy Argumentative Essay</a>
+                    <a href="/buy-argumentative-essay">Argumentative Essays</a>
                   </li>
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/buy-assignment">Buy Assignment</a>
+                    <a href="/buy-assignment"> Assignments</a>
                   </li>
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/buy-biology-papers">Buy Biology Paper</a>
+                    <a href="/buy-biology-papers">Biology Papers</a>
                   </li>
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/buy-capstone-project">Buy Capstone Project</a>
+                    <a href="/buy-capstone-project">Capstone Projects</a>
                   </li>
                   <li className="footerList flex">
                     <i className="fas fa-chevron-right icon"></i>
-                    <a href="/buy-case-study">Buy Case Study</a>
+                    <a href="/buy-case-study">Case Studys</a>
                   </li>
                 </div>
                 <div className="services-column">

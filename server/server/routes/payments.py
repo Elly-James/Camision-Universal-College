@@ -217,6 +217,7 @@ def handle_new_job_payment(data, user):
         if not deadline.tzinfo:
             deadline = deadline.replace(tzinfo=timezone.utc)
         
+        # Create job with Pending Payment status - DO NOT COMMIT YET
         job = Job(
             user_id=user.id,
             client_name=user.name,
@@ -236,8 +237,9 @@ def handle_new_job_payment(data, user):
         )
         
         db.session.add(job)
-        db.session.flush()
+        db.session.flush()  # Get the ID but don't commit
         
+        # Save files temporarily but don't link to job yet
         file_paths = []
         if 'files' in request.files:
             files = request.files.getlist('files')
@@ -250,18 +252,29 @@ def handle_new_job_payment(data, user):
                     file_path = os.path.join(job_folder, filename)
                     file.save(file_path)
                     file_paths.append(os.path.join(f"job_{job.id}", filename))
-            job.files = file_paths
 
         token = get_pesapal_token()
         if not token:
             logger.error("Failed to authenticate with Pesapal")
             db.session.rollback()
+            # Clean up uploaded files
+            for file_path in file_paths:
+                try:
+                    os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], file_path))
+                except:
+                    pass
             return jsonify({'error': 'Failed to authenticate with Pesapal'}), 500
 
         ipn_registration = IPNRegistration.query.filter_by(ipn_status='Active').first()
         if not ipn_registration:
             logger.error("No active IPN registration found")
             db.session.rollback()
+            # Clean up uploaded files
+            for file_path in file_paths:
+                try:
+                    os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], file_path))
+                except:
+                    pass
             return jsonify({'error': 'IPN not registered. Contact admin.'}), 500
 
         headers = {
@@ -303,13 +316,27 @@ def handle_new_job_payment(data, user):
             error_msg = payment_data['error'].get('message', 'Payment initiation failed')
             logger.error(f"Pesapal error: {error_msg}")
             db.session.rollback()
+            # Clean up uploaded files
+            for file_path in file_paths:
+                try:
+                    os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], file_path))
+                except:
+                    pass
             return jsonify({'error': error_msg}), 400
         
         if 'redirect_url' not in payment_data:
             logger.error(f"Invalid response from Pesapal: {payment_data}")
             db.session.rollback()
+            # Clean up uploaded files
+            for file_path in file_paths:
+                try:
+                    os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], file_path))
+                except:
+                    pass
             return jsonify({'error': 'Invalid response from payment gateway'}), 500
         
+        # Now link files to job and commit
+        job.files = file_paths
         job.order_tracking_id = payment_data.get('order_tracking_id')
         job.merchant_reference = merchant_reference
         db.session.commit()
@@ -325,11 +352,23 @@ def handle_new_job_payment(data, user):
     except requests.RequestException as e:
         logger.error(f"Failed to initiate payment: {str(e)} - Response: {getattr(e.response, 'text', 'No response')}")
         db.session.rollback()
+        # Clean up uploaded files
+        for file_path in file_paths:
+            try:
+                os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], file_path))
+            except:
+                pass
         send_payment_email(user.email, current_app.config['PESAPAL_ADMIN_EMAIL'], None, 'Upfront', 'Failed', initial_amount)
         return jsonify({'error': 'Failed to initiate payment', 'details': str(e)}), 500
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         db.session.rollback()
+        # Clean up uploaded files
+        for file_path in file_paths:
+            try:
+                os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], file_path))
+            except:
+                pass
         return jsonify({'error': 'Internal server error'}), 500
 
 def handle_completion_payment(job_id, user, data):
@@ -499,6 +538,20 @@ def handle_ipn():
             
         elif payment_status in ['Failed', 'Invalid']:
             amount = job.total_amount * (0.75 if payment_type == 'completion' else 0.25)
+            # For upfront failures, delete the job and clean up files
+            if payment_type == 'upfront':
+                # Clean up files first
+                if job.files:
+                    for file_path in job.files:
+                        try:
+                            full_path = os.path.join(current_app.config['UPLOAD_FOLDER'], file_path)
+                            os.remove(full_path)
+                        except Exception as e:
+                            logger.error(f"Failed to delete file {file_path}: {str(e)}")
+                # Delete job from database
+                db.session.delete(job)
+                db.session.commit()
+                logger.info(f"Deleted job {job.id} due to failed upfront payment")
             send_payment_email(
                 job.client_email,
                 current_app.config['PESAPAL_ADMIN_EMAIL'],

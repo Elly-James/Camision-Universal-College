@@ -1,3 +1,5 @@
+// api.js (updated)
+
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
@@ -423,7 +425,7 @@ export const getFile = async (filename) => {
         Accept: 'application/octet-stream',
       },
     };
-    const response = await api.get(`/Uploads/${normalizedFilename}`, config);
+    const response = await api.get(`/api/files/${normalizedFilename}`, config);
 
     let downloadFilename = normalizedFilename.split('/').pop();
     const contentDisposition = response.headers['content-disposition'];
@@ -449,6 +451,21 @@ export const getFile = async (filename) => {
     console.error('File download failed:', error);
     throw {
       error: error.error || 'Failed to download file',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
+  }
+};
+
+// New: Get file blob for previews
+export const getFileBlob = async (filename) => {
+  try {
+    const normalizedFilename = filename.replace(/\\/g, '/');
+    const response = await api.get(`/api/files/${normalizedFilename}?preview=true`, { responseType: 'blob' });
+    return response.data;
+  } catch (error) {
+    console.error('File blob fetch failed:', error);
+    throw {
+      error: error.error || 'Failed to fetch file preview',
       details: error.details || error.response?.data?.error?.message || 'Unknown error',
     };
   }
