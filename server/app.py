@@ -1,7 +1,9 @@
-# app.py (updated)
+
+# Updated app.py - Removed strict image URL validation in create_blog and update_blog routes
+# The frontend already handles image preview and errors, so backend no longer rejects URLs without specific extensions
 
 import eventlet
-eventlet.monkey_patch()  # Must be at the top before any other imports
+eventlet.monkey_patch()
 
 from flask import Flask, request, jsonify, send_from_directory, g
 from flask_socketio import SocketIO, emit, disconnect
@@ -13,7 +15,7 @@ import os
 from config import config
 from extensions import db, cors, bcrypt, mail, jwt as jwt_manager
 from flask_migrate import Migrate
-from models import User, Job, Message, ResetToken
+from models import User, Job, Message, ResetToken, Blog
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -23,65 +25,51 @@ from threading import Thread
 from server.routes.auth import auth_bp
 from server.routes.jobs import jobs_bp
 from server.routes.payments import payments_bp
+import re  # Added for URL and content processing
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Allowed file extensions for uploads
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg', 'zip'}
 
 def create_app(config_name='development'):
-    """Application factory function"""
     app = Flask(__name__)
     
-    # Load configuration
     app.config.from_object(config[config_name])
     
-    # Override database URI if not set in config (fallback to env)
     if not app.config.get('SQLALCHEMY_DATABASE_URI'):
         app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     if not app.config.get('SQLALCHEMY_DATABASE_URI'):
         logger.error("DATABASE_URL is not set")
         raise ValueError("DATABASE_URL is not set")
 
-    # Ensure upload folder is set
-    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
+    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'Uploads')
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
     
-    # Initialize extensions
     initialize_extensions(app)
-    
-    # Configure logging
     configure_logging(app)
     
-    # Initialize Flask-Migrate
     migrate = Migrate(app, db)
     
-    # Initialize rate limiter
     limiter = Limiter(
         get_remote_address,
         app=app,
         default_limits=["200 per day", "50 per hour"]
     )
     
-    # Store limiter in app for use in decorators
     app.limiter = limiter
     
-    # Register Blueprints
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
-    app.register_blueprint(auth_bp, url_prefix='/auth', name='auth_legacy')  # Unique name for /auth prefix
+    app.register_blueprint(auth_bp, url_prefix='/auth', name='auth_legacy')
     app.register_blueprint(jobs_bp, url_prefix='/api/jobs')
     app.register_blueprint(payments_bp, url_prefix='/api/payments')
     
-    # Start background cleanup tasks
     start_cleanup_tasks(app)
     
     return app
 
 def initialize_extensions(app):
-    """Initialize Flask extensions"""
     cors.init_app(app, resources={r"/*": {"origins": app.config.get('FRONTEND_URL', 'http://localhost:5173')}}, 
                   supports_credentials=True)
     db.init_app(app)
@@ -89,11 +77,9 @@ def initialize_extensions(app):
     mail.init_app(app)
     jwt_manager.init_app(app)
     
-    # Configure JWT
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
     
-    # Configure SQLAlchemy for thread safety
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'pool_size': 5,
         'max_overflow': 10,
@@ -102,25 +88,21 @@ def initialize_extensions(app):
     }
 
 def configure_logging(app):
-    """Configure application logging"""
     if app.config['DEBUG']:
         logging.getLogger().setLevel(logging.DEBUG)
     else:
         logging.getLogger().setLevel(logging.INFO)
     
-    # Log database connection info
     logger.info(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
 def allowed_file(filename):
-    """Check if file extension is allowed"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def cleanup_old_files(app):
-    """Periodically clean up old uploaded files"""
     while True:
         try:
             with app.app_context():
-                cutoff_time = time.time() - (30 * 24 * 60 * 60)  # 30 days ago
+                cutoff_time = time.time() - (30 * 24 * 60 * 60)
                 upload_folder = app.config['UPLOAD_FOLDER']
                 for root, dirs, files in os.walk(upload_folder):
                     for file in files:
@@ -133,32 +115,28 @@ def cleanup_old_files(app):
                                 logger.error(f"Failed to delete file {file_path}: {str(e)}")
         except Exception as e:
             logger.error(f"File cleanup failed: {str(e)}")
-        time.sleep(24 * 60 * 60)  # Run once a day
+        time.sleep(24 * 60 * 60)
 
 def cleanup_old_reset_tokens(app):
-    """Periodically clean up expired reset tokens"""
     while True:
         try:
             with app.app_context():
-                ResetToken.query.filter(ResetToken.expires_at < datetime.utcnow()).delete()
+                ResetToken.query.filter(ResetToken.expires_at < datetime.now(timezone.utc)).delete()
                 db.session.commit()
                 logger.info("Cleaned up expired reset tokens")
         except Exception as e:
             logger.error(f"Reset token cleanup failed: {str(e)}")
-        time.sleep(24 * 60 * 60)  # Run once a day
+        time.sleep(24 * 60 * 60)
 
 def start_cleanup_tasks(app):
-    """Start background cleanup tasks"""
     file_cleanup_thread = Thread(target=cleanup_old_files, args=(app,), daemon=True)
     token_cleanup_thread = Thread(target=cleanup_old_reset_tokens, args=(app,), daemon=True)
     file_cleanup_thread.start()
     token_cleanup_thread.start()
     logger.info("Started background cleanup tasks")
 
-# Create the application
 app = create_app(os.getenv('FLASK_ENV', 'development'))
 
-# Initialize SocketIO with async_mode explicitly set
 socketio = SocketIO(
     app,
     async_mode='eventlet',
@@ -168,7 +146,25 @@ socketio = SocketIO(
     engineio_logger=True
 )
 
-# Session cleanup
+# Function to validate image URL more flexibly
+def is_valid_image_url(url):
+    if not url:
+        return True  # Allow empty URLs
+    # Check if URL contains an image extension in the path or query
+    image_extensions = ['.png', '.jpg', '.jpeg', '.gif']
+    url_lower = url.lower()
+    return any(ext in url_lower for ext in image_extensions)
+
+# Function to normalize blog content (basic markdown preprocessing)
+def normalize_content(content):
+    # Ensure consistent line breaks and trim excess whitespace
+    content = re.sub(r'\n\s*\n+', '\n\n', content.strip())
+    # Convert simple markdown-like syntax to consistent format
+    content = re.sub(r'^\s*#{2}\s+(.+)$', r'## \1', content, flags=re.MULTILINE)
+    # Add paragraph breaks for single newlines
+    content = re.sub(r'(?<!\n)\n(?!\n)(?![#*-])', '\n\n', content)
+    return content
+
 @app.after_request
 def cleanup_session(response):
     try:
@@ -179,7 +175,6 @@ def cleanup_session(response):
         db.session.remove()
     return response
 
-# Routes
 @app.route('/')
 def index():
     return jsonify({"message": "Welcome to the Academic Assistance API!"})
@@ -213,12 +208,10 @@ def send_message():
             if not content and not files:
                 return jsonify({"error": "Message content or files required"}), 400
 
-            # Assume admin as recipient for client messages
             recipient = User.query.filter_by(role='admin').first()
             if not recipient:
                 return jsonify({"error": "Admin not found"}), 404
 
-            # Handle file uploads
             file_paths = []
             if files:
                 temp_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'temp')
@@ -228,7 +221,7 @@ def send_message():
                         if not allowed_file(file.filename):
                             return jsonify({"error": f"File type not allowed for {file.filename}"}), 400
                         filename = secure_filename(file.filename)
-                        filename = f"msg-{datetime.now().timestamp()}-{filename}"
+                        filename = f"msg-{datetime.now(timezone.utc).timestamp()}-{filename}"
                         file_path = os.path.join(temp_folder, filename)
                         file.save(file_path)
                         file_paths.append(os.path.join('temp', filename))
@@ -292,7 +285,7 @@ def edit_message(message_id):
             return jsonify({"error": "Message content required"}), 400
 
         message.content = content
-        message.updated_at = datetime.utcnow()
+        message.updated_at = datetime.now(timezone.utc)
         db.session.commit()
 
         socketio.emit('message_updated', {
@@ -330,18 +323,15 @@ def delete_message(message_id):
         if not message:
             return jsonify({"error": "Message not found"}), 404
 
-        # Only allow deletion by sender or admin
         if message.sender_id != user.id and user.role != 'admin':
             logger.error(f"Unauthorized message delete attempt by user ID: {user.id} for message ID: {message_id}")
             return jsonify({"error": "Unauthorized"}), 403
 
-        # Mark message as deleted for the requesting user
         if user.role == 'admin':
             message.admin_deleted = True
         else:
             message.client_deleted = True
 
-        # Delete message from database only if both sides have deleted it
         if message.client_deleted and message.admin_deleted:
             db.session.delete(message)
         db.session.commit()
@@ -449,7 +439,7 @@ def send_job_message(job_id):
                     if not allowed_file(file.filename):
                         return jsonify({"error": f"File type not allowed for {file.filename}"}), 400
                     filename = secure_filename(file.filename)
-                    filename = f"completed-{datetime.now().timestamp()}-{filename}"
+                    filename = f"completed-{datetime.now(timezone.utc).timestamp()}-{filename}"
                     file_path = os.path.join(job_folder, filename)
                     file.save(file_path)
                     completed_file_paths.append(os.path.join(f"job_{job_id}", filename))
@@ -460,18 +450,17 @@ def send_job_message(job_id):
                     if not allowed_file(file.filename):
                         return jsonify({"error": f"File type not allowed for {file.filename}"}), 400
                     filename = secure_filename(file.filename)
-                    filename = f"additional-{datetime.now().timestamp()}-{filename}"
+                    filename = f"additional-{datetime.now(timezone.utc).timestamp()}-{filename}"
                     file_path = os.path.join(job_folder, filename)
                     file.save(file_path)
                     additional_file_paths.append(os.path.join(f"job_{job_id}", filename))
 
-            # Determine recipient (admin for client messages, client for admin messages)
             recipient_id = job.user_id if user.role == 'admin' else User.query.filter_by(role='admin').first().id
             if not recipient_id:
                 return jsonify({"error": "Recipient not found"}), 404
 
             message = Message(
-                job_id=job_id,  # Associate message with the job
+                job_id=job_id,
                 sender_id=user.id,
                 recipient_id=recipient_id,
                 sender_role=user.role,
@@ -570,8 +559,6 @@ def get_file(filename):
     if request.method == 'OPTIONS':
         return '', 200
 
-    # For preview requests (e.g., from <img src>), skip token check for simplicity
-    # Note: This may expose files if URLs are guessed, consider signed URLs for production
     is_preview = request.args.get('preview') == 'true'
 
     if not is_preview:
@@ -595,14 +582,13 @@ def get_file(filename):
             return jsonify({"error": "Failed to access file", "details": str(e)}), 500
 
     try:
-        # Normalize path to prevent directory traversal
         filename = os.path.normpath(filename).replace('\\', '/')
         if filename.startswith('/') or '..' in filename:
             logger.error(f"Invalid file path: {filename}")
             return jsonify({"error": "Invalid file path"}), 400
 
         path_parts = filename.split('/')
-        if len(path_parts) < 2 and path_parts[0] != 'temp':
+        if len(path_parts) < 2 and path_parts[0] not in ['temp', 'blog']:
             logger.error(f"Invalid file path format: {filename}")
             return jsonify({"error": "Invalid file path format"}), 400
 
@@ -614,7 +600,7 @@ def get_file(filename):
                 return jsonify({"error": "Invalid job ID in file path"}), 400
             job_id = int(job_id_str)
 
-        if is_preview or user.role == 'admin' or path_parts[0] == 'temp':
+        if is_preview or user.role == 'admin' or path_parts[0] in ['temp', 'blog']:
             try:
                 as_attachment = not is_preview
                 return send_from_directory(
@@ -655,7 +641,204 @@ def get_file(filename):
         logger.error(f"File download error: {str(e)}")
         return jsonify({"error": "Failed to download file", "details": str(e)}), 500
 
-# SocketIO events
+@app.route('/api/blogs', methods=['POST', 'OPTIONS'])
+def create_blog():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user = db.session.get(User, data['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        if user.role != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+
+        try:
+            data = request.form
+            title = data.get('title')
+            content = data.get('content')
+            email = data.get('email')
+            url = data.get('url')
+            image_url = data.get('image_url')  # Changed from image file to image_url
+
+            if not title or not content:
+                return jsonify({"error": "Title and content are required"}), 400
+
+            # Removed strict image URL validation - rely on frontend preview
+            # if image_url and not is_valid_image_url(image_url):
+            #     return jsonify({"error": "Image URL must reference a valid image (e.g., containing .png, .jpg, .jpeg, or .gif)"}), 400
+
+            # Normalize content
+            content = normalize_content(content)
+
+            blog = Blog(
+                title=title,
+                content=content,
+                image=image_url,  # Store the URL directly
+                email=email,
+                url=url,
+                author_id=user.id
+            )
+            db.session.add(blog)
+            db.session.commit()
+
+            socketio.emit('new_blog', blog.to_dict(), namespace='/blogs')
+            logger.info(f"Blog created by user ID: {user.id}, blog ID: {blog.id}")
+            return jsonify({"message": "Blog created successfully", "blog_id": blog.id}), 201
+
+        except Exception as e:
+            logger.error(f"Blog creation failed: {str(e)}")
+            db.session.rollback()
+            return jsonify({"error": "Failed to create blog", "details": str(e)}), 500
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+@app.route('/api/blogs', methods=['GET', 'OPTIONS'])
+def get_blogs():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 6))
+        blogs = Blog.query.order_by(Blog.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+
+        return jsonify({
+            'blogs': [blog.to_dict() for blog in blogs.items],
+            'total': blogs.total,
+            'pages': blogs.pages,
+            'current_page': blogs.page
+        }), 200
+    except Exception as e:
+        logger.error(f"Failed to retrieve blogs: {str(e)}")
+        return jsonify({"error": "Failed to retrieve blogs", "details": str(e)}), 500
+
+@app.route('/api/blogs/<int:blog_id>', methods=['GET', 'OPTIONS'])
+def get_blog(blog_id):
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        blog = db.session.get(Blog, blog_id)
+        if not blog:
+            return jsonify({"error": "Blog not found"}), 404
+        return jsonify(blog.to_dict()), 200
+    except Exception as e:
+        logger.error(f"Failed to retrieve blog ID: {blog_id}: {str(e)}")
+        return jsonify({"error": "Failed to retrieve blog", "details": str(e)}), 500
+
+@app.route('/api/blogs/<int:blog_id>', methods=['PUT', 'OPTIONS'])
+def update_blog(blog_id):
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user = db.session.get(User, data['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        if user.role != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+
+        blog = db.session.get(Blog, blog_id)
+        if not blog:
+            return jsonify({"error": "Blog not found"}), 404
+
+        try:
+            data = request.form
+            title = data.get('title')
+            content = data.get('content')
+            email = data.get('email')
+            url = data.get('url')
+            image_url = data.get('image_url')  # Changed from image file to image_url
+
+            if title:
+                blog.title = title
+            if content:
+                blog.content = normalize_content(content)
+            if email is not None:
+                blog.email = email
+            if url is not None:
+                blog.url = url
+            if image_url is not None:  # Allow empty string to clear the image
+                # Removed strict image URL validation - rely on frontend preview
+                # if image_url and not is_valid_image_url(image_url):
+                #     return jsonify({"error": "Image URL must reference a valid image (e.g., containing .png, .jpg, .jpeg, or .gif)"}), 400
+                blog.image = image_url
+
+            blog.updated_at = datetime.now(timezone.utc)
+            db.session.commit()
+
+            socketio.emit('blog_updated', blog.to_dict(), namespace='/blogs')
+            logger.info(f"Blog updated by user ID: {user.id}, blog ID: {blog.id}")
+            return jsonify({"message": "Blog updated successfully"}), 200
+
+        except Exception as e:
+            logger.error(f"Blog update failed: {str(e)}")
+            db.session.rollback()
+            return jsonify({"error": "Failed to update blog", "details": str(e)}), 500
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
+@app.route('/api/blogs/<int:blog_id>', methods=['DELETE', 'OPTIONS'])
+def delete_blog(blog_id):
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({'error': 'Token missing or invalid'}), 401
+
+    token = token.split(' ')[1]
+    try:
+        data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+        user = db.session.get(User, data['user_id'])
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        if user.role != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+
+        blog = db.session.get(Blog, blog_id)
+        if not blog:
+            return jsonify({"error": "Blog not found"}), 404
+
+        try:
+            if blog.image and os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], blog.image)):
+                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], blog.image))
+            db.session.delete(blog)
+            db.session.commit()
+
+            socketio.emit('blog_deleted', {'blog_id': blog_id}, namespace='/blogs')
+            logger.info(f"Blog deleted by user ID: {user.id}, blog ID: {blog_id}")
+            return jsonify({"message": "Blog deleted successfully"}), 200
+
+        except Exception as e:
+            logger.error(f"Blog deletion failed: {str(e)}")
+            db.session.rollback()
+            return jsonify({"error": "Failed to delete blog", "details": str(e)}), 500
+
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Invalid token'}), 401
+
 @socketio.on('connect', namespace='/jobs')
 def handle_job_connect(auth):
     from flask import request
@@ -698,6 +881,27 @@ def handle_message_connect(auth):
             logger.info(f"Client connected to /messages namespace, user ID: {user.id}")
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
             logger.error(f"SocketIO /messages connect: Invalid token - {str(e)}")
+            disconnect()
+
+@socketio.on('connect', namespace='/blogs')
+def handle_blog_connect(auth):
+    from flask import request
+    token = request.args.get('token')
+    if not token:
+        logger.info("SocketIO /blogs connect: No token, allowing public connection")
+        return
+
+    with app.app_context():
+        try:
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=['HS256'])
+            user = db.session.get(User, data['user_id'])
+            if not user:
+                logger.error("SocketIO /blogs connect: User not found")
+                disconnect()
+                return
+            logger.info(f"Client connected to /blogs namespace, user ID: {user.id}")
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
+            logger.error(f"SocketIO /blogs connect: Invalid token - {str(e)}")
             disconnect()
 
 if __name__ == '__main__':

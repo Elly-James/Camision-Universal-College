@@ -1,5 +1,6 @@
 from extensions import db, bcrypt
 from datetime import datetime
+import pytz
 
 class User(db.Model):
     __tablename__ = 'user'
@@ -9,13 +10,14 @@ class User(db.Model):
     name = db.Column(db.String(120), nullable=False)
     password_hash = db.Column(db.String(128))
     role = db.Column(db.String(50), default='client')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC), onupdate=lambda: datetime.now(pytz.UTC))
     
     jobs = db.relationship('Job', backref='user', lazy=True)
     messages = db.relationship('Message', foreign_keys='Message.sender_id', backref='sender', lazy=True)
     received_messages = db.relationship('Message', foreign_keys='Message.recipient_id', backref='recipient', lazy=True)
     reset_tokens = db.relationship('ResetToken', backref='user', lazy=True)
+    blogs = db.relationship('Blog', backref='author', lazy=True)
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -59,10 +61,9 @@ class Job(db.Model):
     files = db.Column(db.JSON, default=list)
     completed_files = db.Column(db.JSON, default=list)
     completed = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC), onupdate=lambda: datetime.now(pytz.UTC))
 
-    # Updated constraint to match actual values used
     __table_args__ = (
         db.CheckConstraint('payment_status IN (\'Pending\', \'Partial\', \'Completed\')', name='check_payment_status'),
     )
@@ -102,7 +103,7 @@ class ResetToken(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     token = db.Column(db.String(36), unique=True, nullable=False, index=True)
     expires_at = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC))
 
     def to_dict(self):
         return {
@@ -124,8 +125,8 @@ class Message(db.Model):
     files = db.Column(db.JSON, default=list)
     client_deleted = db.Column(db.Boolean, default=False)
     admin_deleted = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC), index=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC), onupdate=lambda: datetime.now(pytz.UTC))
 
     def to_dict(self):
         return {
@@ -147,7 +148,7 @@ class IPNRegistration(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     ipn_id = db.Column(db.String(36), unique=True, nullable=False, index=True)
     url = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC))
     ipn_status = db.Column(db.String(50), default='Active')
 
     def to_dict(self):
@@ -157,4 +158,30 @@ class IPNRegistration(db.Model):
             'url': self.url,
             'created_at': self.created_at.isoformat(),
             'ipn_status': self.ipn_status
+        }
+
+class Blog(db.Model):
+    __tablename__ = 'blog'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    image = db.Column(db.String(255), nullable=True)
+    email = db.Column(db.String(120), nullable=True)
+    url = db.Column(db.String(255), nullable=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC), index=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC), onupdate=lambda: datetime.now(pytz.UTC))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'content': self.content,
+            'image': self.image,
+            'email': self.email,
+            'url': self.url,
+            'author_id': self.author_id,
+            'author_name': self.author.name,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
         }
