@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faFacebookF, faTwitter, faInstagram, faLinkedinIn } from '@fortawesome/free-brands-svg-icons';
+import { faPaperPlane, faBookOpen, faChevronRight, faPhone, faEnvelope, faMapMarkerAlt } from '@fortawesome/free-solid-svg-icons';
 import './Footer.css';
 
 const Footer = () => {
@@ -26,7 +29,13 @@ const Footer = () => {
   return (
     <section className="footer">
       <div className="videoDiv">
-        <video src="https://videos.pexels.com/video-files/2777396/2777396-hd_1920_1080_30fps.mp4" muted autoPlay loop type="video/mp4"></video>
+        <video
+          src="https://videos.pexels.com/video-files/2777396/2777396-hd_1920_1080_30fps.mp4"
+          muted
+          autoPlay
+          loop
+          type="video/mp4"
+        ></video>
       </div>
       <div className="secContent container">
         <div className="contactDiv flex">
@@ -44,11 +53,15 @@ const Footer = () => {
                 required
               />
               <button className="btn flex" type="submit">
-                SEND <i className="fas fa-paper-plane icon"></i>
+                SEND <FontAwesomeIcon icon={faPaperPlane} className="icon" />
               </button>
             </form>
             {subscriptionStatus && (
-              <div className={`subscriptionMessage ${subscriptionStatus.includes('Thank') ? 'success' : 'error'}`}>
+              <div
+                className={`subscriptionMessage ${
+                  subscriptionStatus.includes('Thank') ? 'success' : 'error'
+                }`}
+              >
                 {subscriptionStatus}
               </div>
             )}
@@ -58,12 +71,14 @@ const Footer = () => {
           <div className="footerIntro">
             <div className="logoDiv">
               <a href="/" className="logo flex">
-                <i className="fas fa-book-open icon"></i> Camision-Universal-College
+                <FontAwesomeIcon icon={faBookOpen} className="icon" /> Camision-Universal-College
               </a>
             </div>
             <div className="footerContent">
               <div className="companyInfo">
-              Camision-Universal-College offers expert academic assistance across various subjects. We provide high-quality, custom-written papers to help you succeed in your studies. Our team of professional writers is dedicated to delivering exceptional service tailored to your needs.
+                Camision-Universal-College offers expert academic assistance across various subjects. We provide
+                high-quality, custom-written papers to help you succeed in your studies. Our team of professional
+                writers is dedicated to delivering exceptional service tailored to your needs.
               </div>
               <div className="paymentMethodsContainer">
                 <div className="paymentMethods">
@@ -110,16 +125,16 @@ const Footer = () => {
             </div>
             <div className="footerSocials flex">
               <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-                <i className="fab fa-facebook-f icon"></i>
+                <FontAwesomeIcon icon={faFacebookF} className="icon" />
               </a>
               <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
-                <i className="fab fa-twitter icon"></i>
+                <FontAwesomeIcon icon={faTwitter} className="icon" />
               </a>
               <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
-                <i className="fab fa-instagram icon"></i>
+                <FontAwesomeIcon icon={faInstagram} className="icon" />
               </a>
               <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
-                <i className="fab fa-linkedin-in icon"></i>
+                <FontAwesomeIcon icon={faLinkedinIn} className="icon" />
               </a>
             </div>
           </div>
@@ -127,47 +142,47 @@ const Footer = () => {
             <div className="linkGroup">
               <span className="groupTitle">COMPANY</span>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/about">About</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/testimonials">Testimonials</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/privacy">Privacy Policy</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/faq">FAQ</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/howitworks">How it works</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/contactus">Contact Us</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/writer">We are Hiring</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/terms">Terms and Conditions</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/fair-use-policy">Fair Use Policy</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/payment-policy">Payment Policy</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-chevron-right icon"></i>
+                <FontAwesomeIcon icon={faChevronRight} className="icon" />
                 <a href="/writer/dont-buy-accounts">Don't buy accounts</a>
               </li>
             </div>
@@ -176,68 +191,68 @@ const Footer = () => {
               <div className={`services-wrapper ${showAllServices ? 'expanded' : ''}`}>
                 <div className="services-column">
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/admission-essay-writing-service">Admission Essay Writing Services</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/analytical-essay-writing-service">Analytical Essay Writing Services</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/apa-paper-writing-service">APA Paper Writing Services</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/argumentative-essay-writing-service">Argumentative Essay Writing Services</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/book-report-writing-service">Book Report Writing Services</a>
                   </li>
                 </div>
                 <div className="services-column">
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/buy-argumentative-essay">Argumentative Essays</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
-                    <a href="/buy-assignment"> Assignments</a>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
+                    <a href="/buy-assignment">Assignments</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/buy-biology-papers">Biology Papers</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/buy-capstone-project">Capstone Projects</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
-                    <a href="/buy-case-study">Case Studys</a>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
+                    <a href="/buy-case-study">Case Studies</a>
                   </li>
                 </div>
                 <div className="services-column">
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/coursework-help">Coursework Help</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/descriptive-essay-writing-service">Descriptive Essay Writing Service</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
                     <a href="/dissertation-proposal-writing">Dissertation Proposal Writing</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
-                    <a href="/pay-for-dissertation">Pay For Dissertation</a>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
+                    <a href="/pay-for-dissertation"> For Dissertation</a>
                   </li>
                   <li className="footerList flex">
-                    <i className="fas fa-chevron-right icon"></i>
-                    <a href="/pay-for-thesis">Pay For Thesis</a>
+                    <FontAwesomeIcon icon={faChevronRight} className="icon" />
+                    <a href="/pay-for-thesis">For Thesis</a>
                   </li>
                 </div>
               </div>
@@ -248,15 +263,15 @@ const Footer = () => {
             <div className="linkGroup">
               <span className="groupTitle">CONTACT US</span>
               <li className="footerList flex">
-                <i className="fas fa-phone icon"></i>
+                <FontAwesomeIcon icon={faPhone} className="icon" />
                 <a href="tel:18883985903">1-888-398-5903</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-envelope icon"></i>
+                <FontAwesomeIcon icon={faEnvelope} className="icon" />
                 <a href="mailto:support@Camision-Universal-College.com">support@Camision-Universal-College.com</a>
               </li>
               <li className="footerList flex">
-                <i className="fas fa-map-marker-alt icon"></i>
+                <FontAwesomeIcon icon={faMapMarkerAlt} className="icon" />
                 Online Platform
               </li>
             </div>

@@ -9,7 +9,12 @@ import {
   getJob,
   getSocketJobs, 
   getSocketMessages,
-  getFile 
+  getFile,
+  getBlogs,
+  createBlog,
+  updateBlog,
+  deleteBlog,
+  getSocketBlogs
 } from '../../utils/api.js';
 import toast from 'react-hot-toast';
 import './AdminDashboard.css';
@@ -20,19 +25,26 @@ const AdminDashboard = () => {
   const { user, role, token } = useContext(AuthContext);
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
+  const [blogs, setBlogs] = useState([]);
   const [currentTab, setCurrentTab] = useState('allJobs');
   const [isDownloading, setIsDownloading] = useState(false);
+  const [blogForm, setBlogForm] = useState({ title: '', content: '', url: '', image: '', email: '' });
+  const [editingBlogId, setEditingBlogId] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
     let attempts = 0;
     const maxAttempts = 3;
     while (attempts < maxAttempts) {
       try {
-        const [userData, jobsData] = await Promise.all([
+        const [userData, jobsData, blogsData] = await Promise.all([
           getCurrentUser(),
           getJobs(),
+          getBlogs(1),
         ]);
         setJobs(jobsData);
+        setBlogs(blogsData.blogs);
         return;
       } catch (error) {
         attempts++;
@@ -56,6 +68,7 @@ const AdminDashboard = () => {
 
     const socketJobs = getSocketJobs();
     const socketMessages = getSocketMessages();
+    const socketBlogs = getSocketBlogs();
 
     if (socketJobs) {
       socketJobs.on('new_job', async (job) => {
@@ -91,7 +104,7 @@ const AdminDashboard = () => {
             const updatedJob = await getJob(job_id);
             setSelectedJob({
               ...updatedJob,
-              messages: updatedJob.messages || selectedJob.messages,
+              messages: updatedJob.messages || selectedJob.all_files,
               all_files: updatedJob.all_files || selectedJob.all_files,
             });
           } catch (error) {
@@ -134,6 +147,26 @@ const AdminDashboard = () => {
       });
     }
 
+    if (socketBlogs) {
+      socketBlogs.on('new_blog', async (blog) => {
+        setBlogs((prev) => {
+          if (!prev.some(b => b.id === blog.id)) {
+            return [blog, ...prev];
+          }
+          return prev;
+        });
+        toast.success('New blog posted');
+      });
+      socketBlogs.on('blog_updated', async (blog) => {
+        setBlogs((prev) => prev.map((b) => (b.id === blog.id ? blog : b)));
+        toast.success('Blog updated');
+      });
+      socketBlogs.on('blog_deleted', async ({ blog_id }) => {
+        setBlogs((prev) => prev.filter((b) => b.id !== blog_id));
+        toast.success('Blog deleted');
+      });
+    }
+
     return () => {
       if (socketJobs) {
         socketJobs.off('new_job');
@@ -144,6 +177,11 @@ const AdminDashboard = () => {
         socketMessages.off('new_general_message');
         socketMessages.off('message_updated');
         socketMessages.off('message_deleted');
+      }
+      if (socketBlogs) {
+        socketBlogs.off('new_blog');
+        socketBlogs.off('blog_updated');
+        socketBlogs.off('blog_deleted');
       }
     };
   }, [user, role, navigate, selectedJob, fetchData]);
@@ -170,6 +208,80 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleBlogSubmit = async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
+    try {
+      const blogData = {
+        title: blogForm.title,
+        content: blogForm.content,
+        url: blogForm.url || '',
+        email: blogForm.email || '',
+        image: blogForm.image || ''
+      };
+
+      if (editingBlogId) {
+        await updateBlog(editingBlogId, blogData);
+        toast.success('Blog updated successfully');
+      } else {
+        await createBlog(blogData);
+        toast.success('Blog created successfully');
+      }
+
+      setBlogForm({ title: '', content: '', url: '', image: '', email: '' });
+      setImagePreview(null);
+      setEditingBlogId(null);
+
+      const blogsData = await getBlogs(1);
+      setBlogs(blogsData.blogs);
+      
+    } catch (error) {
+      console.error('Blog submission error:', error);
+      const errorMessage = error.details || error.message || 'Failed to save blog';
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const url = e.target.value;
+    setBlogForm({ ...blogForm, image: url });
+    setImagePreview(url || null);
+  };
+
+  const handleEditBlog = (blog) => {
+    setBlogForm({
+      title: blog.title,
+      content: blog.content,
+      url: blog.url || '',
+      image: blog.image || '',
+      email: blog.email || '',
+    });
+    setImagePreview(blog.image || null);
+    setEditingBlogId(blog.id);
+  };
+
+  const handleDeleteBlog = async (blogId) => {
+    if (window.confirm('Are you sure you want to delete this blog?')) {
+      try {
+        await deleteBlog(blogId);
+        toast.success('Blog deleted successfully');
+        await fetchData();
+      } catch (error) {
+        toast.error(error.message || 'Failed to delete blog');
+      }
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setBlogForm({ title: '', content: '', url: '', image: '', email: '' });
+    setImagePreview(null);
+    setEditingBlogId(null);
+  };
+
   const generateFilePreview = (file) => {
     const fileExtension = (file.name || file).split('.').pop().toLowerCase();
 
@@ -177,7 +289,7 @@ const AdminDashboard = () => {
       return file instanceof File ? (
         <img src={URL.createObjectURL(file)} alt={file.name} className="file-preview" />
       ) : (
-        <img src={`/Uploads/${file}`} alt={file} className="file-preview" />
+        <img src={`${API_URL}/api/files/${file}?preview=true`} alt={file} className="file-preview" />
       );
     } else if (fileExtension === 'pdf') {
       return (
@@ -230,6 +342,15 @@ const AdminDashboard = () => {
               disabled={!selectedJob}
             >
               Job Details
+            </button>
+            <button
+              className={currentTab === 'blogs' ? 'tab-active' : ''}
+              onClick={() => {
+                setCurrentTab('blogs');
+                fetchData();
+              }}
+            >
+              Blogs
             </button>
           </div>
 
@@ -290,6 +411,151 @@ const AdminDashboard = () => {
               generateFilePreview={generateFilePreview}
               isDownloading={isDownloading}
             />
+          )}
+
+          {currentTab === 'blogs' && (
+            <div className="blog-list">
+              <h2>Manage Blogs</h2>
+              <form onSubmit={handleBlogSubmit} className="blog-form mb-8">
+                <div className="mb-4">
+                  <label htmlFor="title" className="block text-gray-700">Title *</label>
+                  <input
+                    type="text"
+                    id="title"
+                    value={blogForm.title}
+                    onChange={(e) => setBlogForm({ ...blogForm, title: e.target.value })}
+                    className="w-full px-3 py-2 border rounded"
+                    required
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="content" className="block text-gray-700">Content (Markdown Supported) *</label>
+                  <textarea
+                    id="content"
+                    value={blogForm.content}
+                    onChange={(e) => setBlogForm({ ...blogForm, content: e.target.value })}
+                    className="w-full px-3 py-2 border rounded font-mono"
+                    rows="10"
+                    required
+                    disabled={isSubmitting}
+                    placeholder="Use ## for headings, * for lists, **bold**, *italic*"
+                  ></textarea>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Supports basic markdown: ## Heading, * List item, **bold**, *italic*
+                  </p>
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="email" className="block text-gray-700">Email (Optional)</label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={blogForm.email}
+                    onChange={(e) => setBlogForm({ ...blogForm, email: e.target.value })}
+                    className="w-full px-3 py-2 border rounded"
+                    placeholder="contact@example.com"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="url" className="block text-gray-700">URL (Optional)</label>
+                  <input
+                    type="url"
+                    id="url"
+                    value={blogForm.url}
+                    onChange={(e) => setBlogForm({ ...blogForm, url: e.target.value })}
+                    className="w-full px-3 py-2 border rounded"
+                    placeholder="https://example.com"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="image" className="block text-gray-700">Image URL (Optional)</label>
+                  <input
+                    type="url"
+                    id="image"
+                    value={blogForm.image}
+                    onChange={handleImageChange}
+                    className="w-full px-3 py-2 border rounded"
+                    placeholder="https://example.com/image.jpg"
+                    disabled={isSubmitting}
+                  />
+                  {imagePreview && (
+                    <div className="mt-2">
+                      <img
+                        src={imagePreview}
+                        alt="Image Preview"
+                        className="w-32 h-32 object-cover rounded"
+                        onError={() => {
+                          setImagePreview(null);
+                          toast.error('Invalid image URL');
+                        }}
+                      />
+                      <p className="text-sm text-gray-600">Preview (loaded from URL)</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex space-x-4">
+                  <button
+                    type="submit"
+                    className={`px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Submitting...' : editingBlogId ? <FaSave /> : 'Create Blog'}
+                  </button>
+                  {editingBlogId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                      disabled={isSubmitting}
+                    >
+                      <FaTimes /> Cancel
+                    </button>
+                  )}
+                </div>
+              </form>
+              <h3>Existing Blogs</h3>
+              {blogs.length > 0 ? (
+                <table className="blog-table w-full">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Author</th>
+                      <th>Created At</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {blogs.map((blog) => (
+                      <tr key={blog.id}>
+                        <td>{blog.title}</td>
+                        <td>{blog.author_name}</td>
+                        <td>{new Date(blog.created_at).toLocaleString()}</td>
+                        <td>
+                          <button
+                            onClick={() => handleEditBlog(blog)}
+                            className="mr-2 text-blue-600 hover:text-blue-800"
+                            disabled={isSubmitting}
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBlog(blog.id)}
+                            className="text-red-600 hover:text-red-800"
+                            disabled={isSubmitting}
+                          >
+                            <FaTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p>No blogs found.</p>
+              )}
+            </div>
           )}
         </div>
       </div>

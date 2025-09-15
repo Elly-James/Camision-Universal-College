@@ -512,49 +512,233 @@
     box-shadow: none;
 }
 
+/* Enhanced Responsive Design */
+@media (max-width: 1400px) {
+  .job-details {
+    padding: 1.75rem;
+  }
+
+  .job-details-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .job-details-header h2 {
+    font-size: 1.6rem;
+  }
+}
+
 @media (max-width: 1200px) {
-    .job-details-grid {
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    }
+  .job-details-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .job-details-header {
+    padding: 0.75rem 0;
+  }
+
+  .action-button {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+  }
 }
 
 @media (max-width: 992px) {
-    .job-details-grid {
-        grid-template-columns: 1fr;
-    }
+  .job-details {
+    padding: 1.5rem;
+  }
 
-    .job-details-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-    }
+  .job-details-grid {
+    grid-template-columns: 1fr;
+  }
 
-    .header-actions {
-        width: 100%;
-        justify-content: flex-end;
-    }
+  .job-details-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .action-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .status-update select {
+    width: 100%;
+    max-width: 180px;
+  }
+
+  .uploaded-files ul {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .job-details {
+    padding: 1.25rem;
+    border-radius: 12px;
+  }
+
+  .job-details-header h2 {
+    font-size: 1.4rem;
+  }
+
+  .job-details-card {
+    padding: 1.25rem;
+  }
+
+  .job-details-card h3 {
+    font-size: 1.1rem;
+  }
+
+  .message {
+    max-width: 85%;
+    padding: 0.8rem;
+  }
+
+  .message p {
+    font-size: 0.85rem;
+  }
+
+  .message-input textarea {
+    padding: 0.6rem;
+    font-size: 0.9rem;
+  }
+
+  .send-message-button,
+  .upload-files-button {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+  }
+
+  .file-upload input[type="file"] {
+    padding: 0.6rem;
+  }
+
+  .uploaded-file-item {
+    padding: 0.6rem;
+  }
+
+  .file-preview-container {
+    height: 70px;
+  }
 }
 
 @media (max-width: 576px) {
-    .job-details {
-        padding: 1.5rem;
-    }
+  .job-details {
+    padding: 1rem;
+    border-radius: 10px;
+  }
 
-    .job-details h2 {
-        font-size: 1.25rem;
-    }
+  .job-details-header h2 {
+    font-size: 1.25rem;
+  }
 
-    .message {
-        max-width: 100%;
-    }
+  .job-details-card {
+    padding: 1rem;
+  }
 
-    .action-button {
-        padding: 0.5rem 1rem;
-        font-size: 0.85rem;
-    }
+  .job-details-card h3 {
+    font-size: 1rem;
+  }
 
-    .send-message-button,
-    .upload-files-button {
-        width: 100%;
-    }
+  .job-details-grid p {
+    font-size: 0.9rem;
+    padding: 0.4rem;
+  }
+
+  .message {
+    max-width: 100%;
+    padding: 0.7rem;
+  }
+
+  .message p {
+    font-size: 0.8rem;
+  }
+
+  .message small {
+    font-size: 0.65rem;
+  }
+
+  .action-button,
+  .send-message-button,
+  .upload-files-button {
+    width: 100%;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.8rem;
+  }
+
+  .status-update select {
+    width: 100%;
+    max-width: 150px;
+    padding: 0.6rem;
+  }
+
+  .uploaded-files ul {
+    grid-template-columns: 1fr;
+  }
+
+  .file-preview-container {
+    height: 60px;
+  }
+
+  .file-preview-icon .file-icon {
+    font-size: 1.3rem;
+  }
+
+  .file-preview-icon .file-type {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .job-details {
+    padding: 0.75rem;
+  }
+
+  .job-details-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .job-details-card {
+    padding: 0.75rem;
+  }
+
+  .job-details-card h3 {
+    font-size: 0.95rem;
+  }
+
+  .job-details-grid p {
+    font-size: 0.85rem;
+  }
+
+  .message-input textarea {
+    padding: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .send-message-button,
+  .upload-files-button {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .file-upload input[type="file"] {
+    padding: 0.5rem;
+  }
+
+  .uploaded-file-item {
+    padding: 0.5rem;
+  }
+
+  .file-preview-container {
+    height: 50px;
+  }
 }

@@ -1,305 +1,358 @@
-/* Define color variables to match your new website */
+/* Home.css */
 :root {
-    --PrimaryColor: #097aa0;
-    --SecondaryColor: orangered;
-    --gradientColor: linear-gradient(to right, orangered, #097aa0);
-    --whiteColor: hsl(0, 0%, 100%);
-    --blackColor: #343a40;
-    --textColor: hsl(240, 4%, 36%);
-    --whiteColorDeam: hsl(0, 0%, 93%);
-    --greyText: rgb(190, 190, 190);
-    --inputColor: rgb(239, 239, 239);
-    --bodyColor: #f7f9fc;
-    --cardBG: rgb(225, 225, 235);
-    --goldColor: gold;
-  }
-  
-  .home {
-    width: 100%;
-    height: 100vh;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: auto;
-  }
-  
-  .home .overlay {
-    position: absolute;
-    height: 100%;
-    width: 100%;
-    background: var(--blackColor);
-    top: 0;
-    bottom: 0;
-    z-index: 1;
-    mix-blend-mode: hard-light;
-    opacity: 0.5;
-  }
-  
-  .home .background-video {
-    position: absolute;
-    height: 100%;
-    width: 100%;
-    top: 0;
-    bottom: 0;
-    object-fit: cover;
-  }
-  
+  --PrimaryColor: #097aa0;
+  --SecondaryColor: orangered;
+  --gradientColor: linear-gradient(to right, orangered, #097aa0);
+  --whiteColor: hsl(0, 0%, 100%);
+  --blackColor: #343a40;
+  --textColor: hsl(240, 4%, 36%);
+  --whiteColorDeam: hsl(0, 0%, 93%);
+  --greyText: rgb(190, 190, 190);
+  --inputColor: rgb(239, 239, 239);
+  --bodyColor: #f7f9fc;
+  --cardBG: rgb(225, 225, 235);
+  --goldColor: gold;
+}
+
+/* Hero section - Mobile-first */
+.home {
+  width: 100%;
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; /* Prevent video overflow */
+}
+
+.home .overlay {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  background: var(--blackColor);
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  mix-blend-mode: hard-light;
+  opacity: 0.5;
+}
+
+.home .background-video {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  bottom: 0;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.homeContent {
+  width: 100%;
+  min-height: max-content;
+  padding: 6rem 1rem 3rem; /* Reduced top padding for mobile to account for fixed header */
+  display: flex;
+  flex-direction: column;
+  row-gap: 2rem;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  color: var(--whiteColor);
+  z-index: 100;
+  position: relative;
+  max-width: 1200px;
+}
+
+.homeContent .textDiv {
+  padding: 1rem 0;
+  text-align: center; /* Center on mobile for better UX */
+  width: 100%;
+}
+
+.homeContent .textDiv .smallText {
+  font-size: 1rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--goldColor);
+  margin-bottom: 0.5rem;
+}
+
+.homeContent .textDiv .homeTitle {
+  position: relative;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 0.5rem;
+  color: var(--whiteColor);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.homeContent .cardDiv {
+  position: relative;
+  padding: 1.5rem;
+  background: var(--whiteColor);
+  border-radius: 10px;
+  width: 100%;
+  box-shadow: 0 2px 8px 4px rgba(178, 178, 178, 0.45);
+  text-align: center;
+}
+
+.homeContent .cardDiv .intro-text {
+  color: var(--textColor);
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 1.5rem;
+  line-height: 1.4;
+}
+
+.homeContent .cardDiv .cta-button {
+  position: absolute;
+  bottom: -0.7rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.homeContent .cardDiv .cta-button .explore-btn {
+  background: var(--gradientColor);
+  color: var(--whiteColor);
+  padding: 0.8rem 1.5rem;
+  border: none;
+  border-radius: 3rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s ease;
+}
+
+.homeContent .cardDiv .cta-button .explore-btn:hover {
+  background: var(--SecondaryColor);
+}
+
+.homeContent .homeFooterIcons {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.homeContent .homeFooterIcons .icon {
+  font-size: 1.5rem;
+  color: var(--whiteColor);
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+.homeContent .homeFooterIcons .icon:hover {
+  color: var(--PrimaryColor);
+}
+
+/* Main section */
+.main-section {
+  width: 100%;
+  padding: 2rem 0;
+  background: var(--bodyColor);
+}
+
+.main-section .secTitle {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding: 0 1rem;
+}
+
+.main-section .secTitle .title {
+  position: relative;
+  display: inline-block;
+  color: var(--blackColor);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.main-section .secTitle .title::after {
+  position: absolute;
+  content: '';
+  background: var(--SecondaryColor);
+  height: 5px;
+  width: 100px; /* Reduced for mobile */
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -8px;
+  border-radius: 10px;
+}
+
+.main-section .secTitle .subtitle {
+  color: var(--textColor);
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}
+
+.main-section .subject-cards {
+  display: grid;
+  grid-template-columns: 1fr; /* Single column on mobile */
+  gap: 1rem;
+  padding: 0 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.main-section .subject-card {
+  background: var(--cardBG);
+  border-radius: 10px;
+  padding: 1.2rem;
+  box-shadow: 0 2px 4px rgba(140, 140, 141, 0.549);
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.main-section .subject-card:hover {
+  background: var(--whiteColor);
+  box-shadow: 1px 4px 4px rgba(85, 85, 114, 0.549);
+  transform: translateY(-5px);
+}
+
+.main-section .subject-card h3 {
+  color: var(--blackColor);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.main-section .subject-card p {
+  font-size: 0.9rem;
+  color: var(--textColor);
+  font-weight: 400;
+  margin-bottom: 1rem;
+  height: 60px;
+  overflow: hidden;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-clamp: 3;
+  text-align: center;
+}
+
+.main-section .subject-card .checkout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.5rem;
+  background: var(--PrimaryColor);
+  color: var(--whiteColor);
+  font-weight: 600;
+  border: none;
+  border-radius: 3rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.main-section .subject-card .checkout-button:hover {
+  background: var(--SecondaryColor);
+}
+
+/* Tablet styles */
+@media screen and (min-width: 768px) {
   .homeContent {
-    width: 100%;
-    height: max-content;
-    padding: 8rem 1.5rem 3rem;
-    display: flex;
+    padding: 7rem 2rem 3rem;
     row-gap: 3rem;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    margin: auto;
-    color: var(--whiteColor);
-    z-index: 100;
   }
-  
+
   .homeContent .textDiv {
-    padding: 2rem 0;
     text-align: left;
-    width: 100%;
-    max-width: 1100px;
-  }
-  
-  .homeContent .textDiv .smallText {
-    font-size: 18px;
-    text-transform: uppercase;
-    font-weight: 600;
-    color: var(--goldColor);
-  }
-  
-  .homeContent .textDiv .homeTitle {
-    position: relative;
-    font-size: 3rem;
-    font-weight: 700;
-    line-height: 1.1;
-    margin-top: 0.5rem;
-    color: var(--whiteColor);
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  }
-  
-  .homeContent .cardDiv {
-    position: relative;
-    padding: 2rem;
-    background: var(--whiteColor);
-    border-radius: 10px;
-    width: 100%;
-    max-width: 1100px;
-    box-shadow: 0 2px 8px 4px rgba(178, 178, 178, 0.45);
-    text-align: center;
-  }
-  
-  .homeContent .cardDiv .intro-text {
-    color: var(--textColor);
-    font-size: 1rem;
-    font-weight: 500;
-    margin-bottom: 1.5rem;
-  }
-  
-  .homeContent .cardDiv .cta-button {
-    position: absolute;
-    bottom: -0.7rem;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-  
-  .homeContent .cardDiv .cta-button .explore-btn {
-    background: var(--gradientColor);
-    color: var(--whiteColor);
-    padding: 8px 1.5rem;
-    border: none;
-    border-radius: 3rem;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-    transition: all 0.3s ease;
-  }
-  
-  .homeContent .cardDiv .cta-button .explore-btn:hover {
-    background: var(--SecondaryColor);
-  }
-  
-  .homeContent .homeFooterIcons {
-    width: 100%;
-    max-width: 1100px;
-    justify-content: space-between;
-    margin-top: 1rem;
-  }
-  
-  .homeContent .homeFooterIcons .icon {
-    font-size: 22px;
-    margin: 0 5px;
-    color: var(--whiteColor);
-    font-weight: 600;
-  }
-  
-  .homeContent .homeFooterIcons .icon:hover {
-    color: var(--PrimaryColor);
-  }
-  
-  .main-section {
-    width: 100%;
     padding: 2rem 0;
-    background: var(--bodyColor);
   }
-  
-  .main-section .secTitle {
-    text-align: center;
-    margin-bottom: 2rem;
+
+  .homeContent .textDiv .smallText {
+    font-size: 1.1rem;
   }
-  
+
+  .homeContent .textDiv .homeTitle {
+    font-size: 2.5rem;
+  }
+
+  .homeContent .cardDiv {
+    padding: 2rem;
+  }
+
+  .homeContent .homeFooterIcons {
+    justify-content: space-between;
+    padding: 0 2rem;
+  }
+
   .main-section .secTitle .title {
-    position: relative;
-    display: inline-block;
-    color: var(--blackColor);
-    font-size: 1.8rem;
-    font-weight: 600;
+    font-size: 1.7rem;
   }
-  
+
   .main-section .secTitle .title::after {
-    position: absolute;
-    content: '';
-    background: var(--SecondaryColor);
-    height: 5px;
     width: 120px;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: -8px;
-    border-radius: 10px;
   }
-  
-  .main-section .secTitle .subtitle {
-    color: var(--textColor);
-    margin-top: 1rem;
+
+  .main-section .subject-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    padding: 0 2rem;
+  }
+
+  .main-section .subject-card {
+    padding: 1.5rem;
+  }
+
+  .main-section .subject-card h3 {
+    font-size: 1.2rem;
+  }
+
+  .main-section .subject-card p {
     font-size: 1rem;
   }
-  
+}
+
+/* Desktop styles */
+@media screen and (min-width: 1024px) {
+  .home {
+    height: 85vh;
+  }
+
+  .homeContent {
+    padding: 8rem 2rem 3rem;
+  }
+
+  .homeContent .textDiv .homeTitle {
+    font-size: 3rem;
+    width: max-content;
+  }
+
+  .main-section .secTitle .title {
+    font-size: 1.8rem;
+  }
+
   .main-section .subject-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
-    padding: 0 20px;
-    max-width: 1200px;
-    margin: 0 auto;
+    grid-template-columns: repeat(3, 1fr);
   }
-  
-  .main-section .subject-card {
-    background: var(--cardBG);
-    border-radius: 10px;
-    padding: 1.5rem;
-    box-shadow: 0 2px 4px rgba(140, 140, 141, 0.549);
-    transition: all 0.3s ease;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
+}
+
+/* Large desktop */
+@media screen and (min-width: 1200px) {
+  .home {
+    height: 95vh;
   }
-  
-  .main-section .subject-card:hover {
-    background: var(--whiteColor);
-    box-shadow: 1px 4px 4px rgba(85, 85, 114, 0.549);
-    transform: translateY(-5px);
+
+  .homeContent {
+    padding-left: 0;
+    padding-right: 0;
   }
-  
-  .main-section .subject-card h3 {
-    color: var(--blackColor);
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
+
+  .homeContent .cardDiv {
+    padding: 2.5rem;
   }
-  
-  .main-section .subject-card p {
-    font-size: 13.5px;
-    color: var(--textColor);
-    font-weight: 400;
-    margin-bottom: 1rem;
-    height: 60px;
-    overflow: hidden;
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
+
+  .main-section .subject-cards {
+    padding: 0 3rem;
+    gap: 2rem;
   }
-  
-  .main-section .subject-card .checkout-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.5rem;
-    background: var(--PrimaryColor);
-    color: var(--whiteColor);
-    font-weight: 600;
-    border: none;
-    border-radius: 3rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    width: 100%;
-  }
-  
-  .main-section .subject-card .checkout-button:hover {
-    background: var(--SecondaryColor);
-  }
-  
-  /* Media Queries */
-  @media screen and (min-width: 320px) {
-    .home .homeContent .cardDiv {
-      padding: 1.5rem;
-    }
-  }
-  
-  @media screen and (min-width: 500px) {
-    .home .homeContent .textDiv .smallText {
-      font-size: 18px;
-    }
-  
-    .home .homeContent .textDiv .homeTitle {
-      font-size: 3.5rem;
-      width: max-content;
-    }
-  }
-  
-  @media screen and (min-width: 660px) {
-    .home .homeContent .cardDiv {
-      padding: 2rem;
-    }
-  }
-  
-  @media screen and (min-width: 940px) {
-    .home {
-      height: 85vh;
-    }
-  }
-  
-  @media screen and (min-width: 1240px) {
-    .home {
-      height: 95vh;
-    }
-  
-    .home .homeContent {
-      padding-left: 0;
-      padding-right: 0;
-    }
-  
-    .home .homeContent .cardDiv {
-      padding: 2rem;
-    }
-  }
-  
-  @media screen and (min-width: 768px) {
-    .main-section .subject-cards {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-  
-  @media screen and (min-width: 1024px) {
-    .main-section .subject-cards {
-      grid-template-columns: repeat(3, 1fr);
-    }
-  }
+}

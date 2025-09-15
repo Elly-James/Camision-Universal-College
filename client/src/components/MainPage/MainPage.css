@@ -1,134 +1,183 @@
+/* Main.css */
 :root {
-    --PrimaryColor: #097aa0;
-    --SecondaryColor: orangered;
-    --gradientColor: linear-gradient(to right, orangered, #097aa0);
-    --whiteColor: hsl(0, 0%, 100%);
-    --blackColor: #343a40;
-    --textColor: hsl(240, 4%, 36%);
-    --whiteColorDeam: hsl(0, 0%, 93%);
-    --greyText: rgb(190, 190, 190);
-    --inputColor: rgb(239, 239, 239);
-    --bodyColor: #f7f9fc;
-    --cardBG: rgb(225, 225, 235);
-    --cardHover: rgb(255, 255, 255);
-  }
-  
+  --PrimaryColor: #097aa0;
+  --SecondaryColor: orangered;
+  --gradientColor: linear-gradient(to right, orangered, #097aa0);
+  --whiteColor: hsl(0, 0%, 100%);
+  --blackColor: #343a40;
+  --textColor: hsl(240, 4%, 36%);
+  --whiteColorDeam: hsl(0, 0%, 93%);
+  --greyText: rgb(190, 190, 190);
+  --inputColor: rgb(239, 239, 239);
+  --bodyColor: #f7f9fc;
+  --cardBG: rgb(225, 225, 235);
+  --cardHover: rgb(255, 255, 255);
+}
+
+/* Mobile-first base styles */
+.main {
+  width: 100%;
+  padding: 2rem 1rem;
+  background: var(--bodyColor);
+}
+
+.main .secTitle {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.main .secTitle .title {
+  position: relative;
+  display: inline-block;
+  color: var(--blackColor);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.main .secTitle .title::after {
+  position: absolute;
+  content: '';
+  background: var(--SecondaryColor);
+  height: 5px;
+  width: 100px; /* Reduced for mobile */
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -8px;
+  border-radius: 10px;
+}
+
+.main .secTitle .subtitle {
+  color: var(--textColor);
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}
+
+.main .secContent {
+  display: grid;
+  grid-template-columns: 1fr; /* Single column on mobile */
+  gap: 1rem;
+  justify-content: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.main .secContent .singleSubject {
+  height: 100%;
+  display: grid;
+  row-gap: 10px;
+  border-radius: 10px;
+  align-items: center;
+  background: var(--cardBG);
+  box-shadow: 0 2px 4px rgba(140, 140, 141, 0.549);
+  overflow: hidden;
+  transition: 0.3s ease;
+}
+
+.main .secContent .singleSubject:hover {
+  background: var(--cardHover);
+  box-shadow: 1px 4px 4px rgba(85, 85, 114, 0.549);
+  transform: translateY(-5px);
+}
+
+.main .secContent .singleSubject .cardInfo {
+  padding: 1.2rem;
+  width: 100%;
+}
+
+.main .secContent .singleSubject .cardInfo .subjectTitle {
+  color: var(--blackColor);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.main .secContent .singleSubject .cardInfo .desc {
+  font-size: 0.9rem;
+  color: var(--textColor);
+  font-weight: 400;
+  margin-bottom: 1rem;
+  height: 80px;
+  overflow: hidden;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  line-clamp: 4;
+}
+
+.main .secContent .singleSubject .cardInfo .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.5rem;
+  background: var(--PrimaryColor);
+  color: var(--whiteColor);
+  font-weight: 600;
+  border: none;
+  border-radius: 3rem;
+  cursor: pointer;
+  transition: 0.3s ease;
+  width: 100%;
+}
+
+.main .secContent .singleSubject .cardInfo .btn:hover {
+  background: var(--SecondaryColor);
+}
+
+/* Tablet styles */
+@media screen and (min-width: 768px) {
   .main {
-    width: 100%;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem 0;
-    background: var(--bodyColor);
+    padding: 2rem 2rem;
   }
-  
-  .main .secTitle {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-  
+
   .main .secTitle .title {
-    position: relative;
-    display: inline-block;
-    color: var(--blackColor);
-    font-size: 1.8rem;
-    font-weight: 600;
+    font-size: 1.7rem;
   }
-  
+
   .main .secTitle .title::after {
-    position: absolute;
-    content: '';
-    background: var(--SecondaryColor);
-    height: 5px;
     width: 120px;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: -8px;
-    border-radius: 10px;
   }
-  
-  .main .secTitle .subtitle {
-    color: var(--textColor);
-    margin-top: 1rem;
-    font-size: 1rem;
-  }
-  
+
   .main .secContent {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
-    justify-content: center;
   }
-  
-  .main .secContent .singleSubject {
-    height: 100%;
-    display: grid;
-    row-gap: 10px;
-    border-radius: 10px;
-    align-items: center;
-    background: var(--cardBG);
-    box-shadow: 0 2px 4px rgba(140, 140, 141, 0.549);
-    overflow: hidden;
-    transition: 0.3s ease;
-  }
-  
-  .main .secContent .singleSubject:hover {
-    background: var(--cardHover);
-    box-shadow: 1px 4px 4px rgba(85, 85, 114, 0.549);
-    transform: translateY(-5px);
-  }
-  
+
   .main .secContent .singleSubject .cardInfo {
     padding: 1.5rem;
   }
-  
+
   .main .secContent .singleSubject .cardInfo .subjectTitle {
-    color: var(--blackColor);
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
+    font-size: 1.2rem;
   }
-  
+
   .main .secContent .singleSubject .cardInfo .desc {
-    font-size: 13.5px;
-    color: var(--textColor);
-    font-weight: 400;
-    margin-bottom: 1rem;
-    height: 80px;
-    overflow: hidden;
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
+    font-size: 1rem;
   }
-  
-  .main .secContent .singleSubject .cardInfo .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.5rem;
-    background: var(--PrimaryColor);
-    color: var(--whiteColor);
-    font-weight: 600;
-    border: none;
-    border-radius: 3rem;
-    cursor: pointer;
-    transition: 0.3s ease;
-    width: 100%;
+}
+
+/* Desktop styles */
+@media screen and (min-width: 1024px) {
+  .main {
+    padding: 3rem 0;
+    max-width: 1200px;
+    margin: 0 auto;
   }
-  
-  .main .secContent .singleSubject .cardInfo .btn:hover {
-    background: var(--SecondaryColor);
+
+  .main .secTitle .title {
+    font-size: 1.8rem;
   }
-  
-  @media screen and (min-width: 768px) {
-    .main .secContent {
-      grid-template-columns: repeat(2, 1fr);
-    }
+
+  .main .secContent {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
   }
-  
-  @media screen and (min-width: 1024px) {
-    .main .secContent {
-      grid-template-columns: repeat(3, 1fr);
-    }
+}
+
+/* Large desktop */
+@media screen and (min-width: 1200px) {
+  .main {
+    padding: 4rem 0;
   }
+}

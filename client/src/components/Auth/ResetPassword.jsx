@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../utils/api';
-import './ResetPassword.css';
+import './AuthShared.css';
 
 const ResetPassword = () => {
   const navigate = useNavigate();

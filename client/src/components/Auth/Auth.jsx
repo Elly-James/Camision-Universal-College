@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import AppleLogin from 'react-apple-login';
 import { AuthContext } from '../context/AuthContext';
-import './Auth.css';
+import './AuthShared.css';
 
 const Auth = () => {
   const navigate = useNavigate();

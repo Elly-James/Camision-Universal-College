@@ -36,6 +36,14 @@ const Header = () => {
                 Home
               </NavLink>
             </li>
+            <li className="navItem">
+              <NavLink 
+                to="/blog" 
+                className={({ isActive }) => `navLink ${isActive ? 'activeLink' : ''}`}
+              >
+                Blog
+              </NavLink>
+            </li>
             {user && role === 'client' && (
               <li className="navItem">
                 <NavLink

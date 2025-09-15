@@ -9,20 +9,16 @@ const MainPage = () => {
 
   const subjects = [
     {
-      title: 'Nursing',
+      title: 'Health Sciences',
       description:
-        'Get expertly crafted nursing essays and case studies. Our writers specialize in healthcare topics to meet your academic needs.',
+        'Expert support for medical students with tailored papers in nursing, pharmacology, public health, and clinical research.',
     },
     {
       title: 'Mathematics',
       description:
         'Solve complex math problems with ease. From calculus to statistics, our experts deliver accurate and detailed solutions.',
     },
-    {
-      title: 'English Literature',
-      description:
-        'Analyze literary works with in-depth essays. Our writers provide insightful interpretations for your literature assignments.',
-    },
+  
     {
       title: 'History',
       description:

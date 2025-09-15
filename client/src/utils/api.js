@@ -1,12 +1,11 @@
-// api.js (updated)
-
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+export const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 let token = localStorage.getItem('token') || null;
 let socketJobs = null;
 let socketMessages = null;
+let socketBlogs = null;
 
 const api = axios.create({
   baseURL: API_URL,
@@ -16,39 +15,37 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Request Interceptor: Add Authorization header with token if available
 api.interceptors.request.use(
   (config) => {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Utility function for exponential backoff delay
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Response Interceptor: Handle errors, rate limiting, and token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // Handle 429 (Too Many Requests) with exponential backoff
     if (error.response && error.response.status === 429 && !originalRequest._retryCount) {
       originalRequest._retryCount = originalRequest._retryCount || 0;
       if (originalRequest._retryCount < 3) {
         originalRequest._retryCount += 1;
-        const backoffTime = Math.pow(2, originalRequest._retryCount) * 1000; // 2s, 4s, 8s
+        const backoffTime = Math.pow(2, originalRequest._retryCount) * 1000;
         console.warn(`Rate limit hit for ${originalRequest.url}, retrying after ${backoffTime}ms`);
         await delay(backoffTime);
         return api(originalRequest);
       }
     }
 
-    // Handle 401 (Unauthorized) with token refresh
     if (
       error.response &&
       error.response.status === 401 &&
@@ -65,6 +62,7 @@ api.interceptors.response.use(
               Authorization: `Bearer ${localStorage.getItem('refresh_token')}`,
             },
             withCredentials: true,
+            timeout: 10000,
           }
         );
         const { access_token } = refreshResponse.data;
@@ -88,9 +86,10 @@ api.interceptors.response.use(
         data: error.response.data,
         url: originalRequest.url,
       });
+      const errorDetails = error.response.data.details || error.response.data.error || 'Request failed';
       return Promise.reject({
         error: error.response.data.error || 'Request failed',
-        details: error.response.data.details || error.response.data,
+        details: errorDetails,
       });
     }
     console.error('Network Error:', error.message);
@@ -98,71 +97,87 @@ api.interceptors.response.use(
   }
 );
 
-// Set token and reconnect sockets
 export const setToken = (newToken) => {
   token = newToken;
   localStorage.setItem('token', newToken);
   reconnectSockets();
 };
 
-// Clear token and disconnect sockets
 export const clearToken = () => {
   token = null;
   localStorage.removeItem('token');
   disconnectSockets();
 };
 
-// Reconnect Socket.IO connections
 const reconnectSockets = () => {
   disconnectSockets();
-  if (token) {
-    socketJobs = io(`${API_URL}/jobs`, {
-      path: '/socket.io',
-      query: { token },
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+  socketJobs = io(`${API_URL}/jobs`, {
+    path: '/socket.io',
+    query: { token },
+    transports: ['websocket', 'polling'],
+    withCredentials: true,
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+  });
 
-    socketMessages = io(`${API_URL}/messages`, {
-      path: '/socket.io',
-      query: { token },
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+  socketMessages = io(`${API_URL}/messages`, {
+    path: '/socket.io',
+    query: { token },
+    transports: ['websocket', 'polling'],
+    withCredentials: true,
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+  });
 
-    socketJobs.on('connect', () => {
-      console.log('Socket.IO /jobs connected');
-    });
+  socketBlogs = io(`${API_URL}/blogs`, {
+    path: '/socket.io',
+    query: { token },
+    transports: ['websocket', 'polling'],
+    withCredentials: true,
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+  });
 
-    socketMessages.on('connect', () => {
-      console.log('Socket.IO /messages connected');
-    });
+  socketJobs.on('connect', () => {
+    console.log('Socket.IO /jobs connected');
+  });
 
-    socketJobs.on('connect_error', (error) => {
-      console.error('Socket.IO /jobs connection error:', error);
-    });
+  socketMessages.on('connect', () => {
+    console.log('Socket.IO /messages connected');
+  });
 
-    socketMessages.on('connect_error', (error) => {
-      console.error('Socket.IO /messages connection error:', error);
-    });
+  socketBlogs.on('connect', () => {
+    console.log('Socket.IO /blogs connected');
+  });
 
-    socketJobs.on('disconnect', (reason) => {
-      console.warn('Socket.IO /jobs disconnected:', reason);
-    });
+  socketJobs.on('connect_error', (error) => {
+    console.error('Socket.IO /jobs connection error:', error);
+  });
 
-    socketMessages.on('disconnect', (reason) => {
-      console.warn('Socket.IO /messages disconnected:', reason);
-    });
-  }
+  socketMessages.on('connect_error', (error) => {
+    console.error('Socket.IO /messages connection error:', error);
+  });
+
+  socketBlogs.on('connect_error', (error) => {
+    console.error('Socket.IO /blogs connection error:', error);
+  });
+
+  socketJobs.on('disconnect', (reason) => {
+    console.warn('Socket.IO /jobs disconnected:', reason);
+  });
+
+  socketMessages.on('disconnect', (reason) => {
+    console.warn('Socket.IO /messages disconnected:', reason);
+  });
+
+  socketBlogs.on('disconnect', (reason) => {
+    console.warn('Socket.IO /blogs disconnected:', reason);
+  });
 };
 
-// Disconnect Socket.IO connections
 const disconnectSockets = () => {
   if (socketJobs) {
     socketJobs.disconnect();
@@ -172,17 +187,20 @@ const disconnectSockets = () => {
     socketMessages.disconnect();
     socketMessages = null;
   }
+  if (socketBlogs) {
+    socketBlogs.disconnect();
+    socketBlogs = null;
+  }
 };
 
 export const getSocketJobs = () => socketJobs;
 export const getSocketMessages = () => socketMessages;
+export const getSocketBlogs = () => socketBlogs;
 
-// Initialize sockets if token exists
 if (token) {
   reconnectSockets();
 }
 
-// Authentication API calls
 export const login = async (email, password) => {
   try {
     const response = await api.post('/auth/login', { email, password });
@@ -266,7 +284,6 @@ export const resetPassword = async (token, password) => {
   }
 };
 
-// Job-related API calls
 export const createJob = async (formData) => {
   try {
     const config = {
@@ -301,14 +318,18 @@ export const getJob = async (jobId) => {
 
 export const updateJob = async (jobId, updates) => {
   try {
-    const response = await api.put(`/api/jobs/${jobId}`, updates);
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    };
+    const response = await api.put(`/api/jobs/${jobId}`, updates, config);
     return response.data;
   } catch (error) {
     throw error;
   }
 };
 
-// Message-related API calls
 export const sendMessage = async (formData, jobId = null) => {
   try {
     const url = jobId ? `/api/jobs/${jobId}/messages` : '/api/messages';
@@ -355,13 +376,11 @@ export const getMessages = async (jobId = null) => {
   }
 };
 
-// Payment-related API calls
 export const initiatePayment = async (payload) => {
   try {
     const config = {
       headers: {},
     };
-    // Route to appropriate endpoint based on payload
     const url = payload.job_id ? '/api/payments/initiate-completion' : '/api/payments/initiate-upfront';
     if (payload instanceof FormData) {
       config.headers['Content-Type'] = 'multipart/form-data';
@@ -382,7 +401,7 @@ export const initiatePayment = async (payload) => {
 export const getPaymentStatus = async (orderTrackingId) => {
   try {
     let attempts = 0;
-    const maxAttempts = 3; // Reduced for faster feedback
+    const maxAttempts = 3;
     let response;
     while (attempts < maxAttempts) {
       try {
@@ -392,7 +411,7 @@ export const getPaymentStatus = async (orderTrackingId) => {
           return response.data;
         }
         attempts++;
-        const backoffTime = Math.pow(2, attempts) * 1000; // 1s, 2s, 4s
+        const backoffTime = Math.pow(2, attempts) * 1000;
         console.warn(`Payment status PENDING, retrying after ${backoffTime}ms (attempt ${attempts}/${maxAttempts})`);
         await delay(backoffTime);
       } catch (error) {
@@ -415,7 +434,6 @@ export const getPaymentStatus = async (orderTrackingId) => {
   }
 };
 
-// File download API call
 export const getFile = async (filename) => {
   try {
     const normalizedFilename = filename.replace(/\\/g, '/');
@@ -456,7 +474,6 @@ export const getFile = async (filename) => {
   }
 };
 
-// New: Get file blob for previews
 export const getFileBlob = async (filename) => {
   try {
     const normalizedFilename = filename.replace(/\\/g, '/');
@@ -466,6 +483,99 @@ export const getFileBlob = async (filename) => {
     console.error('File blob fetch failed:', error);
     throw {
       error: error.error || 'Failed to fetch file preview',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
+  }
+};
+
+export const getBlogs = async (page = 1, per_page = 6) => {
+  try {
+    const response = await api.get(`/api/blogs?page=${page}&per_page=${per_page}`);
+    return response.data;
+  } catch (error) {
+    console.error('Get blogs failed:', error);
+    throw {
+      error: error.error || 'Failed to fetch blogs',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
+  }
+};
+
+export const getBlog = async (blogId) => {
+  try {
+    const response = await api.get(`/api/blogs/${blogId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Get blog failed:', error);
+    throw {
+      error: error.error || 'Failed to fetch blog',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
+  }
+};
+
+export const createBlog = async (payload) => {
+  try {
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    };
+    
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        const fieldName = key === 'image' ? 'image_url' : key;
+        formData.append(fieldName, value);
+      }
+    });
+    
+    const response = await api.post('/api/blogs', formData, config);
+    return response.data;
+  } catch (error) {
+    console.error('Create blog failed:', error);
+    throw {
+      error: error.error || 'Failed to create blog',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
+  }
+};
+
+export const updateBlog = async (blogId, payload) => {
+  try {
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    };
+    
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) { // Allow empty string for clearing fields
+        const fieldName = key === 'image' ? 'image_url' : key;
+        formData.append(fieldName, value);
+      }
+    });
+    
+    const response = await api.put(`/api/blogs/${blogId}`, formData, config);
+    return response.data;
+  } catch (error) {
+    console.error('Update blog failed:', error);
+    throw {
+      error: error.error || 'Failed to update blog',
+      details: error.details || error.response?.data?.error?.message || 'Unknown error',
+    };
+  }
+};
+
+export const deleteBlog = async (blogId) => {
+  try {
+    const response = await api.delete(`/api/blogs/${blogId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Delete blog failed:', error);
+    throw {
+      error: error.error || 'Failed to delete blog',
       details: error.details || error.response?.data?.error?.message || 'Unknown error',
     };
   }

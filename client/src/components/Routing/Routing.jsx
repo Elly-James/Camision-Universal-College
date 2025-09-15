@@ -5,9 +5,11 @@ import MainPage from '../MainPage/MainPage.jsx';
 import Auth from '../Auth/Auth.jsx';
 import ClientDashboard from '../ClientDashboard/ClientDashboard.jsx';
 import AdminDashboard from '../AdminDashboard/AdminDashboard.jsx';
+import BlogPage from '../BlogPage/BlogPage.jsx';
+import BlogDetails from '../BlogPage/BlogDetails.jsx';
 import ForgotPassword from '../Auth/ForgotPassword.jsx';
 import ResetPassword from '../Auth/ResetPassword.jsx';
-import PaymentCallback from '../PaymentCallback/PaymentCallback.jsx'; // Import PaymentCallback
+import PaymentCallback from '../PaymentCallback/PaymentCallback.jsx';
 import { AuthContext } from '../context/AuthContext.jsx';
 
 const Routing = () => {
@@ -20,6 +22,8 @@ const Routing = () => {
       {/* Public Routes */}
       <Route path="/" element={<Home />} />
       <Route path="/main" element={<MainPage />} />
+      <Route path="/blog" element={<BlogPage />} />
+      <Route path="/blog/:id" element={<BlogDetails />} />
 
       {/* Auth Routes */}
       <Route
