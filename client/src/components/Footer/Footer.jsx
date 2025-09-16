@@ -20,7 +20,7 @@ const Footer = () => {
       return;
     }
 
-    window.location.href = `mailto:support@Camision-Universal-College.com?subject=Contact from Camision-Universal-College &body=Hello, I would like to get more information about your services. My email is ${email}.`;
+    window.location.href = `mailto:support@Apex-Study-Forge.com?subject=Contact from Apex-Study-Forge &body=Hello, I would like to get more information about your services. My email is ${email}.`;
 
     setSubscriptionStatus('Thank you for contacting us! We will get back to you soon.');
     setEmail('');
@@ -71,12 +71,12 @@ const Footer = () => {
           <div className="footerIntro">
             <div className="logoDiv">
               <a href="/" className="logo flex">
-                <FontAwesomeIcon icon={faBookOpen} className="icon" /> Camision-Universal-College
+                <FontAwesomeIcon icon={faBookOpen} className="icon" /> Apex-Study-Forge
               </a>
             </div>
             <div className="footerContent">
               <div className="companyInfo">
-                Camision-Universal-College offers expert academic assistance across various subjects. We provide
+                Apex-Study-Forge offers expert academic assistance across various subjects. We provide
                 high-quality, custom-written papers to help you succeed in your studies. Our team of professional
                 writers is dedicated to delivering exceptional service tailored to your needs.
               </div>
@@ -268,7 +268,7 @@ const Footer = () => {
               </li>
               <li className="footerList flex">
                 <FontAwesomeIcon icon={faEnvelope} className="icon" />
-                <a href="mailto:support@Camision-Universal-College.com">support@Camision-Universal-College.com</a>
+                <a href="mailto:support@Apex-Study-Forge.com">support@Apex-Study-Forge.com</a>
               </li>
               <li className="footerList flex">
                 <FontAwesomeIcon icon={faMapMarkerAlt} className="icon" />
@@ -278,7 +278,7 @@ const Footer = () => {
           </div>
           <div className="footerDiv flex">
             <small>BEST ACADEMIC ASSISTANCE</small>
-            <small>© 2025 CAMISION UNIVERSAL COLLEGE. ALL RIGHTS RESERVED.</small>
+            <small>© 2025 APEX STUDY FORGE. ALL RIGHTS RESERVED.</small>
           </div>
         </div>
       </div>

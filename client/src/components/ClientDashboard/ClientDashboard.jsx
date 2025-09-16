@@ -590,7 +590,7 @@ const ClientDashboard = () => {
       <div className="client-dashboard-container">
         <div className="client-dashboard">
           <div className="dashboard-header">
-            <h1>Client Dashboard</h1>
+            <h1>Dashboard</h1>
             <div className="user-info">
               <p>Welcome, {user?.name}</p>
             </div>

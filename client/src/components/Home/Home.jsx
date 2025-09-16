@@ -8,7 +8,7 @@ const subjects = [
   { name: 'Literature', description: 'Classic novels, Poetry, Literary analysis.' },
   { name: 'History', description: 'World History, American History, Ancient Civilizations.' },
   { name: 'Programming', description: 'Python, JavaScript, Java, and more.' },
-  { name: 'Languages', description: 'Spanish, French, German, and more.' },
+  { name: 'Health Sciences', description: 'Nursing, Pharmacology, Public Health, and more.' }, // Replaced Languages here
 ];
 
 const Home = () => {

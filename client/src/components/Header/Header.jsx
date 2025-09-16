@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import logoImage from '../../assets/logo-apex-study-forge3.png';
 import './Header.css';
 
 const Header = () => {
@@ -20,9 +21,11 @@ const Header = () => {
     <header className="headerSection">
       <div className="header flex">
         <div className="logoDiv">
-          <div className="logo-img"></div>
+          <div className="logo-img">
+            <img src={logoImage} alt="Apex Study Forge Logo" />
+          </div>
           <NavLink to="/" className="logo">
-            <h1>Camision Universal College</h1>
+            <h1>Apex Study Forge</h1>
           </NavLink>
         </div>
 
