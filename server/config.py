@@ -1,3 +1,5 @@
+# config.py - Updated to support multiple admin emails
+
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -12,6 +14,9 @@ class Config:
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'Uploads')
     MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB upload limit
     FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+    
+    # Admin emails configuration - support multiple emails
+    ADMIN_EMAILS = [email.strip() for email in os.getenv('ADMIN_EMAILS', '').split(',') if email.strip()]
     
     # Mail configuration
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')

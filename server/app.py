@@ -1,6 +1,4 @@
-
-# Updated app.py - Removed strict image URL validation in create_blog and update_blog routes
-# The frontend already handles image preview and errors, so backend no longer rejects URLs without specific extensions
+# Updated app.py (added /api/contact route after the existing routes, and imported random for selecting one admin email)
 
 import eventlet
 eventlet.monkey_patch()
@@ -18,7 +16,7 @@ from flask_migrate import Migrate
 from models import User, Job, Message, ResetToken, Blog
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from flask_limiter.util import get_remote_address  # Corrected import (only get_remote_address needed)
 from sqlalchemy import and_, or_
 import time
 from threading import Thread
@@ -26,6 +24,7 @@ from server.routes.auth import auth_bp
 from server.routes.jobs import jobs_bp
 from server.routes.payments import payments_bp
 import re  # Added for URL and content processing
+import random  # Added for random selection of admin email
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,7 +42,7 @@ def create_app(config_name='development'):
         logger.error("DATABASE_URL is not set")
         raise ValueError("DATABASE_URL is not set")
 
-    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'Uploads')
+    app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
     
@@ -345,7 +344,7 @@ def delete_message(message_id):
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Token expired'}), 401
     except jwt.InvalidTokenError:
-        return jsonify({'error': 'Invalid token'}), 401
+        return jupytext({'error': 'Invalid token'}), 401
     except Exception as e:
         logger.error(f"Message deletion failed: {str(e)}")
         db.session.rollback()
@@ -555,6 +554,7 @@ def get_job_messages(job_id):
         return jsonify({"error": "Failed to retrieve messages", "details": str(e)}), 500
 
 @app.route('/api/files/<path:filename>', methods=['GET', 'OPTIONS'])
+@app.limiter.limit("1000 per hour")  # Use limiter.limit for Flask-Limiter 3.8.0
 def get_file(filename):
     if request.method == 'OPTIONS':
         return '', 200
@@ -838,6 +838,39 @@ def delete_blog(blog_id):
         return jsonify({'error': 'Token expired'}), 401
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Invalid token'}), 401
+
+@app.route('/api/contact', methods=['POST', 'OPTIONS'])
+def contact():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        data = request.get_json()
+        user_email = data.get('email')
+        if not user_email:
+            return jsonify({"error": "Email required"}), 400
+
+        admin_emails = os.getenv('ADMIN_EMAILS', '').split(',')
+        if not admin_emails:
+            return jsonify({"error": "No admin emails configured"}), 500
+
+        # Select one random admin email as per "one of given"
+        recipient = random.choice(admin_emails)
+
+        from flask_mail import Message
+        msg = Message(
+            "New Contact from Apex-Study-Forge",
+            sender=app.config['MAIL_DEFAULT_SENDER'],
+            recipients=[recipient]
+        )
+        msg.body = f"Hello, I would like to get more information about your services. My email is {user_email}."
+        mail.send(msg)
+
+        logger.info(f"Contact email sent to {recipient} from {user_email}")
+        return jsonify({"message": "Thank you for contacting us! We will get back to you soon."}), 200
+    except Exception as e:
+        logger.error(f"Contact email failed: {str(e)}")
+        return jsonify({"error": "Failed to send contact email", "details": str(e)}), 500
 
 @socketio.on('connect', namespace='/jobs')
 def handle_job_connect(auth):

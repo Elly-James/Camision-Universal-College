@@ -207,7 +207,7 @@ def handle_new_job_payment(data, user):
         if abs(calculated_total - total_amount) > 0.01:
             logger.error(f"Total amount mismatch: calculated={calculated_total}, provided={total_amount}")
             return jsonify({'error': 'Total amount mismatch'}), 400
-        initial_amount = total_amount * 0.25
+        initial_amount = total_amount * 0.05
     except ValueError:
         logger.error("Invalid pages or totalAmount value")
         return jsonify({'error': 'Pages and totalAmount must be valid numbers'}), 400
@@ -377,7 +377,7 @@ def handle_completion_payment(job_id, user, data):
         logger.error(f"Invalid job or payment status for completion job ID: {job_id}, user ID: {user.id}, status: {job.payment_status if job else 'None'}")
         return jsonify({'error': 'Invalid job or already paid'}), 400
 
-    remaining_amount = job.total_amount * 0.75
+    remaining_amount = job.total_amount * 0.01
     
     token = get_pesapal_token()
     if not token:
@@ -537,7 +537,7 @@ def handle_ipn():
             )
             
         elif payment_status in ['Failed', 'Invalid']:
-            amount = job.total_amount * (0.75 if payment_type == 'completion' else 0.25)
+            amount = job.total_amount * (0.01 if payment_type == 'completion' else 0.05)
             # For upfront failures, delete the job and clean up files
             if payment_type == 'upfront':
                 # Clean up files first

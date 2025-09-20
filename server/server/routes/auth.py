@@ -99,11 +99,13 @@ def login():
         if not user or not user.check_password(data['password']):
             return jsonify({"error": "Invalid credentials"}), 401
 
-        admin_email = os.getenv('ADMIN_EMAIL')
-        if not admin_email:
-            return jsonify({"error": "Server configuration error: ADMIN_EMAIL not set"}), 500
+        admin_emails_str = os.getenv('ADMIN_EMAILS')
+        if not admin_emails_str:
+            return jsonify({"error": "Server configuration error: ADMIN_EMAILS not set"}), 500
 
-        if user.email == admin_email:
+        admin_emails = [email.strip() for email in admin_emails_str.split(',') if email.strip()]
+
+        if user.email in admin_emails:
             user.role = 'admin'
         else:
             user.role = 'client'
@@ -187,11 +189,13 @@ def google_login():
             db.session.add(user)
             db.session.commit()
 
-        admin_email = os.getenv('ADMIN_EMAIL')
-        if not admin_email:
-            return jsonify({"error": "Server configuration error: ADMIN_EMAIL not set"}), 500
+        admin_emails_str = os.getenv('ADMIN_EMAILS')
+        if not admin_emails_str:
+            return jsonify({"error": "Server configuration error: ADMIN_EMAILS not set"}), 500
 
-        if user.email == admin_email:
+        admin_emails = [email.strip() for email in admin_emails_str.split(',') if email.strip()]
+
+        if user.email in admin_emails:
             user.role = 'admin'
         else:
             user.role = 'client'
@@ -259,11 +263,13 @@ def apple_login():
             db.session.add(user)
             db.session.commit()
 
-        admin_email = os.getenv('ADMIN_EMAIL')
-        if not admin_email:
-            return jsonify({"error": "Server configuration error: ADMIN_EMAIL not set"}), 500
+        admin_emails_str = os.getenv('ADMIN_EMAILS')
+        if not admin_emails_str:
+            return jsonify({"error": "Server configuration error: ADMIN_EMAILS not set"}), 500
 
-        if user.email == admin_email:
+        admin_emails = [email.strip() for email in admin_emails_str.split(',') if email.strip()]
+
+        if user.email in admin_emails:
             user.role = 'admin'
         else:
             user.role = 'client'
@@ -349,12 +355,12 @@ def forgot_password():
 
         reset_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/reset-password?token={token}"
         msg = Message(
-            subject="Password Reset Request for Camison Universal College",
+            subject="Password Reset Request for Apex Study Forge",
             recipients=[user.email],
             body=f"""
 Dear {user.name or user.email.split('@')[0]},
 
-You have requested to reset your password for your Camison Universal College account.
+You have requested to reset your password for your Apex Study Forge account.
 
 Please click the following link to reset your password:
 {reset_url}
@@ -362,7 +368,7 @@ Please click the following link to reset your password:
 This link will expire in 1 hour. If you did not request this, please ignore this email or contact support.
 
 Best regards,
-Camison Universal College Team
+Apex Study Forge Team
             """
         )
         try:
