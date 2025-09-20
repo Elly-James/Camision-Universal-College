@@ -1,4 +1,3 @@
-// ClientDashboard.jsx (updated)
 
 import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -32,7 +31,7 @@ const ClientDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, role, token } = useContext(AuthContext);
-  const [isLoading, setIsLoading] = useState(true); // New: Track loading state
+  const [isLoading, setIsLoading] = useState(true); // Fixed: Use state for loading
 
   // Form states
   const [subject, setSubject] = useState('');
@@ -91,7 +90,6 @@ const ClientDashboard = () => {
             const blob = await getFileBlob(file);
             newPreviews[file] = URL.createObjectURL(blob);
           } catch (e) {
-            console.error(`Failed to fetch preview for ${file}:`, e);
           }
         }
       }
@@ -107,28 +105,6 @@ const ClientDashboard = () => {
     };
   }, [selectedJob]);
 
-  // Updated: Load pending form data from localStorage on mount if newOrder tab
-  useEffect(() => {
-    if (currentTab === 'newOrder') {
-      const pendingForm = localStorage.getItem('pendingJobForm');
-      if (pendingForm) {
-        const formData = JSON.parse(pendingForm);
-        setSubject(formData.subject || '');
-        setTitle(formData.title || '');
-        setPages(formData.pages || 1);
-        setDeadline(formData.deadline ? new Date(formData.deadline) : new Date());
-        setInstructions(formData.instructions || '');
-        setWriterLevel(formData.writerLevel || 'highschool');
-        setFormattingStyle(formData.formattingStyle || 'APA');
-        setSpacing(formData.spacing || 'double');
-        setCitedResources(formData.citedResources || 0);
-        setPhoneNumber(formData.phoneNumber || user?.phone || '+254712345678');
-        setCountryCode(formData.countryCode || 'KE');
-        toast.info('Restored previous form data due to payment issue.');
-      }
-    }
-  }, [currentTab, user]);
-
   // Updated: Auth check with loading state
   useEffect(() => {
     const checkAuth = async () => {
@@ -137,7 +113,6 @@ const ClientDashboard = () => {
         await getCurrentUser();
         setIsLoading(false); // Mark loading complete
       } catch (error) {
-        console.error('Auth check error:', error);
         setIsLoading(false);
         navigate('/auth');
       }
@@ -151,7 +126,6 @@ const ClientDashboard = () => {
     if (!isLoading && user && role === 'client') {
       fetchData();
     } else if (!isLoading && (!user || role !== 'client')) {
-      console.log('Redirecting to /auth: user=', user, 'role=', role);
       navigate('/auth');
     }
 
@@ -183,7 +157,10 @@ const ClientDashboard = () => {
               messages: [...(prev.messages || []), message],
             }));
           }
-          toast.success('New message received');
+          if (message.sender_role !== 'client') {
+            toast.success('New message from admin');
+          }
+          // Removed duplicate toast for own sent messages
         }
       });
       socketMessages.on('message_updated', (message) => {
@@ -272,7 +249,6 @@ const ClientDashboard = () => {
       setCompletedJobs(jobsData.filter((job) => job.status === 'Completed'));
       setChatMessages(messagesData.filter((msg) => !hiddenMessageIds.includes(msg.id)));
     } catch (error) {
-      console.error('Fetch data error:', error);
       toast.error(error.error || 'Failed to load data');
       if (error.error?.includes('Token')) {
         navigate('/auth');
@@ -285,7 +261,7 @@ const ClientDashboard = () => {
     return pages * (rates[writerLevel] || 6);
   };
 
-  const calculateUpfrontAmount = () => (calculateTotalAmount() * 0.25).toFixed(2);
+  const calculateUpfrontAmount = () => (calculateTotalAmount() * 0.05).toFixed(2);
 
   const handlePostJob = async (e) => {
     e.preventDefault();
@@ -334,7 +310,6 @@ const ClientDashboard = () => {
         throw new Error(response.error || 'No redirect URL received from server');
       }
     } catch (error) {
-      console.error('Job creation or payment initiation error:', error);
       let errorMessage = error.error || 'Failed to create job or initiate payment';
       if (error.error?.includes('IPN not registered')) {
         errorMessage = 'Payment system not configured. Please contact support.';
@@ -357,7 +332,6 @@ const ClientDashboard = () => {
         throw new Error(response.error || 'No redirect URL received for remaining payment');
       }
     } catch (error) {
-      console.error('Remaining payment initiation error:', error);
       let errorMessage = error.error || 'Failed to initiate remaining payment';
       if (error.error?.includes('IPN not registered')) {
         errorMessage = 'Payment system not configured. Please contact support.';
@@ -394,7 +368,6 @@ const ClientDashboard = () => {
       toast.success('File downloaded successfully!');
     } catch (error) {
       toast.error(error.error || 'Failed to download file');
-      console.error('Download error:', error);
     } finally {
       setIsDownloading(false);
     }
@@ -420,6 +393,7 @@ const ClientDashboard = () => {
       });
       setAdditionalFiles([]);
       toast.success('Additional files uploaded successfully!');
+      // Removed duplicate socket toast handling here (handled in socket listener)
     } catch (error) {
       toast.error(error.error || 'Failed to upload additional files');
     } finally {
@@ -443,6 +417,7 @@ const ClientDashboard = () => {
           const messages = await getMessages();
           setChatMessages(messages.filter((msg) => !hiddenMessageIds.includes(msg.id)));
           toast.success('Message sent successfully!');
+          // Removed duplicate socket toast handling here (handled in socket listener)
         } catch (error) {
           toast.error(error.error || 'Failed to send message');
         }
@@ -1022,7 +997,7 @@ const ClientDashboard = () => {
                         className="auth-button"
                         disabled={isPayingRemaining}
                       >
-                        {isPayingRemaining ? 'Processing...' : `Pay Remaining 75% ($${ (selectedJob.total_amount * 0.75).toFixed(2) })`}
+                        {isPayingRemaining ? 'Processing...' : `Pay Remaining 75% ($${ (selectedJob.total_amount * 0.01).toFixed(2) })`}
                       </button>
                     )}
                     {selectedJob.payment_status === 'Completed' && (

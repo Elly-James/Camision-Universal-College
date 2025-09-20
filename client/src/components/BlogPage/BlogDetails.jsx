@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getBlog, getBlogs } from '../../utils/api.js';
 import toast from 'react-hot-toast';
 import Header from '../Header/Header.jsx';
@@ -7,9 +7,11 @@ import './BlogDetails.css';
 
 const BlogDetails = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [blog, setBlog] = useState(null);
   const [relatedBlogs, setRelatedBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchBlog = async () => {
@@ -20,6 +22,7 @@ const BlogDetails = () => {
         const blogsResponse = await getBlogs(1, 4);
         setRelatedBlogs(blogsResponse.blogs.filter((b) => b.id !== parseInt(id)));
       } catch (error) {
+        setError(error.message || 'Failed to load blog');
         toast.error(error.message || 'Failed to load blog');
       } finally {
         setLoading(false);
@@ -28,156 +31,143 @@ const BlogDetails = () => {
     fetchBlog();
   }, [id]);
 
+  const renderContent = (content) => {
+    try {
+      if (!content) return { elements: null, tocItems: [] };
+
+      const sections = content.split('\n').filter(line => line.trim());
+      const elements = [];
+      let currentList = [];
+      let tocItems = [];
+      let sectionIndex = 0;
+
+      for (let i = 0; i < sections.length; i++) {
+        const line = sections[i].trim();
+        if (!line) continue;
+
+        if (line.startsWith('## ')) {
+          if (currentList.length > 0) {
+            elements.push(
+              <ul key={`list-${i}`} className="content-list">
+                {currentList}
+              </ul>
+            );
+            currentList = [];
+          }
+
+          const headingText = line.replace('## ', '');
+          const headingId = `section-${sectionIndex}`;
+          tocItems.push({ id: headingId, text: headingText, index: sectionIndex });
+          elements.push(
+            <h2 key={i} id={headingId} className="section-heading">
+              {headingText}
+            </h2>
+          );
+          sectionIndex++;
+          continue;
+        }
+
+        if (line.endsWith(':') && !line.startsWith('*') && line.split(' ').length <= 4) {
+          if (currentList.length > 0) {
+            elements.push(
+              <ul key={`list-${i}`} className="content-list">
+                {currentList}
+              </ul>
+            );
+            currentList = [];
+          }
+          elements.push(
+            <h3 key={i} className="subsection-heading">
+              {line.replace(':', '')}
+            </h3>
+          );
+          continue;
+        }
+
+        if (line.startsWith('* ')) {
+          const listContent = line.replace('* ', '');
+          currentList.push(
+            <li key={`list-item-${i}`} className="list-item">
+              {formatInlineText(listContent)}
+            </li>
+          );
+          continue;
+        }
+
+        if (currentList.length > 0) {
+          elements.push(
+            <ul key={`list-${i}`} className="content-list">
+              {currentList}
+            </ul>
+          );
+          currentList = [];
+        }
+
+        if (line.length > 0) {
+          elements.push(
+            <p key={i} className="content-paragraph">
+              {formatInlineText(line)}
+            </p>
+          );
+        }
+      }
+
+      if (currentList.length > 0) {
+        elements.push(
+          <ul key="final-list" className="content-list">
+            {currentList}
+          </ul>
+        );
+      }
+
+      return { elements, tocItems };
+    } catch (err) {
+      toast.error('Error rendering blog content');
+      return { elements: <p>Error rendering content</p>, tocItems: [] };
+    }
+  };
+
+  const formatInlineText = (text) => {
+    let formatted = text;
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="bold-text">$1</strong>');
+    formatted = formatted.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em class="italic-text">$1</em>');
+    formatted = formatted.replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g, 
+      '<a href="$2" class="content-link" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+    return <span dangerouslySetInnerHTML={{ __html: formatted }} />;
+  };
+
   if (loading) {
     return (
       <>
         <Header />
         <div className="blog-details-container">
           <div className="blog-details">
-            <div className="loading-spinner">Loading blog details...</div>
+            <div className="loading-spinner">Loading blog details, please wait...</div>
           </div>
         </div>
       </>
     );
   }
 
-  if (!blog) {
+  if (error || !blog) {
     return (
       <>
         <Header />
         <div className="blog-details-container">
           <div className="blog-details">
-            <div className="not-found">Blog not found.</div>
+            <div className="not-found">
+              Blog not found.
+              <button onClick={() => navigate('/blog')} className="auth-button">
+                Back to Blog
+              </button>
+            </div>
           </div>
         </div>
       </>
     );
   }
-
-  const renderContent = (content) => {
-    if (!content) return null;
-
-    const sections = content.split('\n').filter(line => line.trim());
-    const elements = [];
-    let currentList = [];
-    let tocItems = [];
-    let sectionIndex = 0;
-
-    for (let i = 0; i < sections.length; i++) {
-      const line = sections[i].trim();
-      if (!line) continue;
-
-      // Handle main headings (##)
-      if (line.startsWith('## ')) {
-        // Close any open list
-        if (currentList.length > 0) {
-          elements.push(
-            <ul key={`list-${i}`} className="content-list">
-              {currentList}
-            </ul>
-          );
-          currentList = [];
-        }
-
-        const headingText = line.replace('## ', '');
-        const headingId = `section-${sectionIndex}`;
-        
-        // Add to table of contents
-        tocItems.push({
-          id: headingId,
-          text: headingText,
-          index: sectionIndex
-        });
-
-        elements.push(
-          <h2 key={i} id={headingId} className="section-heading">
-            {headingText}
-          </h2>
-        );
-        sectionIndex++;
-        continue;
-      }
-
-      // Handle secondary headings (single words or phrases ending with colon)
-      if (line.endsWith(':') && !line.startsWith('*') && line.split(' ').length <= 4) {
-        // Close any open list
-        if (currentList.length > 0) {
-          elements.push(
-            <ul key={`list-${i}`} className="content-list">
-              {currentList}
-            </ul>
-          );
-          currentList = [];
-        }
-
-        elements.push(
-          <h3 key={i} className="subsection-heading">
-            {line.replace(':', '')}
-          </h3>
-        );
-        continue;
-      }
-
-      // Handle list items
-      if (line.startsWith('* ')) {
-        const listContent = line.replace('* ', '');
-        currentList.push(
-          <li key={`list-item-${i}`} className="list-item">
-            {formatInlineText(listContent)}
-          </li>
-        );
-        continue;
-      }
-
-      // Close any open list before adding paragraph
-      if (currentList.length > 0) {
-        elements.push(
-          <ul key={`list-${i}`} className="content-list">
-            {currentList}
-          </ul>
-        );
-        currentList = [];
-      }
-
-      // Handle regular paragraphs
-      if (line.length > 0) {
-        elements.push(
-          <p key={i} className="content-paragraph">
-            {formatInlineText(line)}
-          </p>
-        );
-      }
-    }
-
-    // Close any remaining list
-    if (currentList.length > 0) {
-      elements.push(
-        <ul key="final-list" className="content-list">
-          {currentList}
-        </ul>
-      );
-    }
-
-    return { elements, tocItems };
-  };
-
-  const formatInlineText = (text) => {
-    let formatted = text;
-    
-    // Handle bold text (**text**)
-    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="bold-text">$1</strong>');
-    
-    // Handle italic text (*text*)
-    formatted = formatted.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em class="italic-text">$1</em>');
-    
-    // Handle links [text](url)
-    formatted = formatted.replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g, 
-      '<a href="$2" class="content-link" target="_blank" rel="noopener noreferrer">$1</a>'
-    );
-    
-    return <span dangerouslySetInnerHTML={{ __html: formatted }} />;
-  };
 
   const { elements, tocItems } = renderContent(blog.content);
 

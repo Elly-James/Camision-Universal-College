@@ -1,3 +1,5 @@
+// Updated api.js (added contact function at the bottom)
+
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
@@ -578,6 +580,15 @@ export const deleteBlog = async (blogId) => {
       error: error.error || 'Failed to delete blog',
       details: error.details || error.response?.data?.error?.message || 'Unknown error',
     };
+  }
+};
+
+export const contact = async (email) => {
+  try {
+    const response = await api.post('/api/contact', { email });
+    return response.data;
+  } catch (error) {
+    throw error;
   }
 };
 

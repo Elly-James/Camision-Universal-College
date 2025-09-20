@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import api from '../../utils/api';
+import toast from 'react-hot-toast';
 
 export const AuthContext = createContext();
 
@@ -12,8 +13,7 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     const storedRole = localStorage.getItem('role');
 
-    if (token && storedRole) {
-      setRole(storedRole);
+    if (token && storedRole && !user) {
       fetchUser(token);
     } else {
       setLoading(false);
@@ -26,13 +26,8 @@ export const AuthProvider = ({ children }) => {
       setUser(response.data.user);
       setRole(response.data.role);
     } catch (error) {
-      console.error('Failed to fetch user:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('role');
-      localStorage.removeItem('email');
-      setUser(null);
-      setRole(null);
+      toast.error('Failed to authenticate. Please log in again.');
+      logout();
     } finally {
       setLoading(false);
     }
@@ -52,7 +47,9 @@ export const AuthProvider = ({ children }) => {
       setRole(userRole);
       return userRole;
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Login failed. Please check your credentials.');
+      const errorMessage = error.response?.data?.error || 'Login failed. Please check your credentials.';
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
@@ -70,8 +67,9 @@ export const AuthProvider = ({ children }) => {
       setRole(userRole);
       return userRole;
     } catch (error) {
-      console.error('Google login error:', error);
-      throw new Error(error.response?.data?.error || 'Google login failed. Please try again.');
+      const errorMessage = error.response?.data?.error || 'Google login failed. Please try again.';
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
@@ -89,7 +87,9 @@ export const AuthProvider = ({ children }) => {
       setRole(userRole);
       return userRole;
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Apple login failed. Please try again.');
+      const errorMessage = error.response?.data?.error || 'Apple login failed. Please try again.';
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
@@ -107,7 +107,9 @@ export const AuthProvider = ({ children }) => {
       setRole(userRole);
       return userRole;
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Registration failed. Please try again.');
+      const errorMessage = error.response?.data?.error || 'Registration failed. Please try again.';
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 

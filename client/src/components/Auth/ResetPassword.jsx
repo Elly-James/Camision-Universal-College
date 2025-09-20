@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../utils/api';
+import toast from 'react-hot-toast';
 import './AuthShared.css';
 
 const ResetPassword = () => {
@@ -15,22 +16,40 @@ const ResetPassword = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const validatePassword = (password) => {
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+    return passwordRegex.test(password);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
     setError('');
     setLoading(true);
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      toast.error('Passwords do not match');
       setLoading(false);
       return;
     }
+
+    if (!validatePassword(password)) {
+      setError('Password must be at least 8 characters long and include at least one uppercase letter and one number');
+      toast.error('Password must be at least 8 characters long and include at least one uppercase letter and one number');
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await api.post('/auth/reset-password', { token, password });
       setMessage(response.data.message);
-      setTimeout(() => navigate('/auth'), 3000); // Redirect after 3 seconds
+      toast.success(response.data.message);
+      setTimeout(() => navigate('/auth'), 3000);
     } catch (err) {
-      setError(err.response?.data?.error || 'An error occurred. Please try again.');
+      const errorMessage = err.response?.data?.error || 'An error occurred. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -98,7 +117,13 @@ const ResetPassword = () => {
             </div>
           </div>
           <button type="submit" className="auth-button" disabled={loading}>
-            {loading ? 'Resetting...' : 'Reset Password'}
+            {loading ? (
+              <>
+                <span className="spinner"></span> Resetting...
+              </>
+            ) : (
+              'Reset Password'
+            )}
           </button>
         </form>
         <p>

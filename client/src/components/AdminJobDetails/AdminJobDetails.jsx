@@ -1,5 +1,3 @@
-// AdminJobDetails.jsx (updated)
-
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext.jsx';
 import {
@@ -55,7 +53,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
             const blob = await getFileBlob(file);
             newPreviews[file] = URL.createObjectURL(blob);
           } catch (e) {
-            console.error(`Failed to fetch preview for ${file}:`, e);
           }
         }
       }
@@ -110,7 +107,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
             onUpdate();
             toast.success(`Payment status updated to ${payment_status}`);
           } catch (error) {
-            console.error('Failed to refresh job after payment update:', error);
             toast.error('Failed to refresh job data');
           }
         }
@@ -146,7 +142,7 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
               ? [...(prev.completed_files || []), ...(message.files.filter((f) => f.includes('completed-')))]
               : prev.completed_files,
           }));
-          toast.success('Your message sent successfully');
+          // Removed duplicate toast for own sent message
         }
       });
       socketMessages.on('message_updated', (message) => {
@@ -200,7 +196,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       onUpdate();
       toast.success('Job status updated successfully!');
     } catch (error) {
-      console.error('Job status update failed:', error);
       toast.error(error.error || 'Failed to update job status');
     }
   };
@@ -228,7 +223,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
         toast.info('No change in payment status');
       }
     } catch (error) {
-      console.error('Payment status check failed:', error);
       toast.error(error.error || 'Failed to check payment status');
     } finally {
       setIsCheckingPayment(false);
@@ -257,7 +251,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       setNewMessage('');
       toast.success('Message sent successfully!');
     } catch (error) {
-      console.error('Send message failed:', error);
       toast.error(error.error || 'Failed to send message');
     } finally {
       setIsUploading(false);
@@ -290,7 +283,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
         await updateJobStatus('Completed');
       }
     } catch (error) {
-      console.error('Upload completed files failed:', error);
       toast.error(error.error || 'Failed to upload completed files');
     } finally {
       setIsUploading(false);
@@ -320,7 +312,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       setEditedMessageContent('');
       toast.success('Message updated successfully!');
     } catch (error) {
-      console.error('Edit message failed:', error);
       toast.error(error.error || 'Failed to edit message');
     }
   };
@@ -340,7 +331,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       }));
       toast.success('Message deleted successfully!');
     } catch (error) {
-      console.error('Delete message failed:', error);
       toast.error(error.error || 'Failed to delete message');
     }
   };
@@ -362,7 +352,6 @@ const AdminJobDetails = ({ job, onBack, onUpdate, downloadFile, generateFilePrev
       }));
       toast.success('Chat history cleared successfully!');
     } catch (error) {
-      console.error('Clear chat history failed:', error);
       toast.error(error.error || 'Failed to clear chat history');
     }
   };

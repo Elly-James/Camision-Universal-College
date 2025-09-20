@@ -1,8 +1,11 @@
+// Updated footer.jsx
+
 import React, { useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFacebookF, faTwitter, faInstagram, faLinkedinIn } from '@fortawesome/free-brands-svg-icons';
 import { faPaperPlane, faBookOpen, faChevronRight, faPhone, faEnvelope, faMapMarkerAlt } from '@fortawesome/free-solid-svg-icons';
 import './Footer.css';
+import { contact } from '../../utils/api.js'; // Adjust the import path based on your file structure (assuming api.js is in the same directory or parent)
 
 const Footer = () => {
   const [showAllServices, setShowAllServices] = useState(false);
@@ -13,17 +16,20 @@ const Footer = () => {
     setShowAllServices(!showAllServices);
   };
 
-  const handleSubscribe = (e) => {
+  const handleSubscribe = async (e) => {
     e.preventDefault();
     if (!email) {
       setSubscriptionStatus('Please enter a valid email address.');
       return;
     }
 
-    window.location.href = `mailto:support@Apex-Study-Forge.com?subject=Contact from Apex-Study-Forge &body=Hello, I would like to get more information about your services. My email is ${email}.`;
-
-    setSubscriptionStatus('Thank you for contacting us! We will get back to you soon.');
-    setEmail('');
+    try {
+      await contact(email);
+      setSubscriptionStatus('Thank you for contacting us! We will get back to you soon.');
+      setEmail('');
+    } catch (error) {
+      setSubscriptionStatus('An error occurred while sending your message. Please try again later.');
+    }
   };
 
   return (
@@ -124,16 +130,16 @@ const Footer = () => {
               </div>
             </div>
             <div className="footerSocials flex">
-              <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+              <a href="https://www.facebook.com/profile.php?id=100072957581262" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
                 <FontAwesomeIcon icon={faFacebookF} className="icon" />
               </a>
-              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+              <a href="https://x.com/Ellyjames_" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
                 <FontAwesomeIcon icon={faTwitter} className="icon" />
               </a>
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+              <a href="https://www.instagram.com/ejk694/?hl=en" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
                 <FontAwesomeIcon icon={faInstagram} className="icon" />
               </a>
-              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+              <a href="linkedin.com/in/elly-james" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
                 <FontAwesomeIcon icon={faLinkedinIn} className="icon" />
               </a>
             </div>
@@ -264,15 +270,19 @@ const Footer = () => {
               <span className="groupTitle">CONTACT US</span>
               <li className="footerList flex">
                 <FontAwesomeIcon icon={faPhone} className="icon" />
-                <a href="tel:18883985903">1-888-398-5903</a>
+                <a href="tel:+254743767800">+254 743 767 800</a>
               </li>
               <li className="footerList flex">
                 <FontAwesomeIcon icon={faEnvelope} className="icon" />
-                <a href="mailto:support@Apex-Study-Forge.com">support@Apex-Study-Forge.com</a>
+                <a href="mailto:support@apexstudyforge.com">support@apexstudyforge.com</a>
               </li>
               <li className="footerList flex">
-                <FontAwesomeIcon icon={faMapMarkerAlt} className="icon" />
-                Online Platform
+                <FontAwesomeIcon icon={faEnvelope} className="icon" />
+                <a href="mailto:Vagasheredia@gmail.com">Vagasheredia@gmail.com</a>
+              </li>
+               <li className="footerList flex">
+                <FontAwesomeIcon icon={faEnvelope} className="icon" />
+                <a href="mailto:ellykomunga@gmail.com">ellykomunga@gmail.com</a>
               </li>
             </div>
           </div>

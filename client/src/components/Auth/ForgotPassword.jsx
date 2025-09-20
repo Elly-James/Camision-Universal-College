@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
+import toast from 'react-hot-toast';
 import './AuthShared.css';
 
 const ForgotPassword = () => {
@@ -10,17 +11,33 @@ const ForgotPassword = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
     setError('');
     setLoading(true);
+
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
+      toast.error('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await api.post('/auth/forgot-password', { email });
       setMessage(response.data.message);
-      setTimeout(() => navigate('/auth'), 5000); // Redirect after 5 seconds
+      toast.success(response.data.message);
+      setTimeout(() => navigate('/auth'), 5000);
     } catch (err) {
-      setError(err.response?.data?.error || 'An error occurred. Please try again.');
+      const errorMessage = err.response?.data?.error || 'An error occurred. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -46,7 +63,13 @@ const ForgotPassword = () => {
             />
           </div>
           <button type="submit" className="auth-button" disabled={loading}>
-            {loading ? 'Sending...' : 'Send Reset Link'}
+            {loading ? (
+              <>
+                <span className="spinner"></span> Sending...
+              </>
+            ) : (
+              'Send Reset Link'
+            )}
           </button>
         </form>
         <p>

@@ -7,34 +7,35 @@ import './PaymentCallback.css';
 const PaymentCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
+  const { user, role } = useContext(AuthContext);
   const [paymentStatus, setPaymentStatus] = useState('processing');
 
   useEffect(() => {
-    if (!user || user.role !== 'client') {
+    if (!user || role !== 'client') {
       navigate('/auth');
       return;
     }
 
     const orderTrackingId = searchParams.get('OrderTrackingId');
     const paymentType = searchParams.get('type');
+    const jobId = searchParams.get('job_id');
 
-    if (!orderTrackingId) {
+    if (!orderTrackingId || !jobId) {
       setPaymentStatus('error');
-      toast.error('Invalid payment response');
+      toast.error('Invalid payment response or missing job ID');
       return;
     }
 
-    // Defer payment verification to ClientDashboard to avoid duplicate API calls
     setTimeout(() => {
       setPaymentStatus('redirecting');
+      toast.success('Redirecting to dashboard...');
       navigate(
         `/client-dashboard?tab=${
           paymentType === 'completion' ? 'completedJobs' : 'activeJobs'
-        }&OrderTrackingId=${orderTrackingId}&job_id=${searchParams.get('job_id')}&type=${paymentType}`
+        }&OrderTrackingId=${orderTrackingId}&job_id=${jobId}&type=${paymentType}`
       );
-    }, 2000); // Show processing briefly for UX
-  }, [searchParams, user, navigate]);
+    }, 1500);
+  }, [searchParams, user, role, navigate]);
 
   return (
     <div className="payment-callback-container">

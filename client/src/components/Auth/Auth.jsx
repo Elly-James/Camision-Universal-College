@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
 import AppleLogin from 'react-apple-login';
 import { AuthContext } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 import './AuthShared.css';
 
 const Auth = () => {
@@ -16,10 +17,22 @@ const Auth = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isLogin) {
         const userRole = await login(email, password);
@@ -34,8 +47,9 @@ const Auth = () => {
         navigate(`/${userRole}-dashboard`);
       }
     } catch (err) {
-      console.error('Auth Error:', err);
-      setError(err.response?.data?.error || err.message || 'An error occurred during authentication');
+      const errorMessage = err.response?.data?.error || err.message || 'An error occurred during authentication';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -51,16 +65,18 @@ const Auth = () => {
       const userRole = await googleLogin(response.credential);
       navigate(`/${userRole}-dashboard`);
     } catch (err) {
-      console.error('Google Login Error:', err);
-      setError(err.message || 'Google login failed. Please try again.');
+      const errorMessage = err.message || 'Google login failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleError = () => {
-    console.error('Google Login Failed');
-    setError('Google login failed. Please try again or use another method.');
+    const errorMessage = 'Google login failed. Please try again or use another method.';
+    setError(errorMessage);
+    toast.error(errorMessage);
     setLoading(false);
   };
 
@@ -75,11 +91,20 @@ const Auth = () => {
         throw new Error('No ID token received from Apple');
       }
     } catch (err) {
-      console.error('Apple Login Error:', err);
-      setError(err.response?.data?.error || err.message || 'Apple login failed');
+      const errorMessage = err.response?.data?.error || err.message || 'Apple login failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setError('');
   };
 
   return (
@@ -187,7 +212,11 @@ const Auth = () => {
             clientId={import.meta.env.VITE_APPLE_CLIENT_ID}
             redirectURI={import.meta.env.VITE_APPLE_REDIRECT_URI}
             onSuccess={handleAppleResponse}
-            onError={() => setError('Apple Login Failed')}
+            onError={() => {
+              const errorMessage = 'Apple Login Failed';
+              setError(errorMessage);
+              toast.error(errorMessage);
+            }}
             render={({ onClick }) => (
               <button 
                 onClick={onClick} 
@@ -205,11 +234,7 @@ const Auth = () => {
           <button
             onClick={() => {
               setIsLogin(!isLogin);
-              setError('');
-              setEmail('');
-              setPassword('');
-              setConfirmPassword('');
-              setShowPassword(false);
+              resetForm();
             }}
             className="toggle-button"
             disabled={loading}
